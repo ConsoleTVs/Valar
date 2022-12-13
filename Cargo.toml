@@ -16,7 +16,6 @@ anyhow = { version = "1.0.66" }
 thiserror = { version = "1.0.37" }
 log = { version = "0.4.17" }
 env_logger = { version = "0.10.0"  }
-sea-orm = { version = "^0", features = ["sqlx-mysql", "runtime-tokio-rustls", "macros" ] }
 
 [dev-dependencies]
 criterion = { version = "0.3" }
