@@ -1,0 +1,31 @@
+[package]
+name = "valar"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+http = { version = "0.2.8" }
+regex = { version = "1.7.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", optional = true }
+hyper = { version = "0.14.23", features = ["full"] }
+tokio = { version = "1.22.0", features = ["full"] }
+anyhow = { version = "1.0.66" }
+thiserror = { version = "1.0.37" }
+log = { version = "0.4.17" }
+env_logger = { version = "0.10.0"  }
+async-trait = { version = "0.1.60" }
+tokio-postgres = { version = "0.7.7" }
+
+# [dev-dependencies]
+# criterion = { version = "0.3" }
+
+# [[bench]]
+# name = "router"
+# harness = false
+
+[features]
+default = ["json"]
+json = ["dep:serde_json"]

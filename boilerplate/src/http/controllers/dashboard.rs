@@ -1,12 +1,4 @@
-# Valar
-
-> **Info**
-> This is an experimental, developer-centric async Rust web framework. This is a Proof Of Concept project not meant to be used in any real applications.
-
-> **Warning**
-> Under heavy development. APIs are subject to change.
-
-```rs
+use crate::App;
 use serde::Serialize;
 use std::sync::Arc;
 use tokio_postgres::Error as PGError;
@@ -14,46 +6,9 @@ use valar::database::builder::Whereable;
 use valar::database::Database;
 use valar::database::Executor;
 use valar::database::Row;
-use valar::http::Server;
 use valar::http::Request;
 use valar::http::Response;
 use valar::http::Result;
-use async_trait::async_trait;
-use valar::Application;
-use valar::Error;
-use valar::routing::Routable;
-use valar::routing::Router;
-
-pub struct App {
-    pub database: Database,
-}
-
-#[async_trait]
-impl Application for App {
-    async fn create() -> Result<Self, Error> {
-        let app = Self {
-            database: Database::connect("host=localhost user=erik dbname=valar").await?,
-        };
-
-        Ok(app)
-    }
-}
-
-impl Routable for App {
-    type Application = App;
-
-    fn router() -> Router<Self::Application> {
-        let mut router = Router::default();
-
-        router.get("/", index);
-        router.post("/", create);
-        router.get("/:id", show);
-        router.patch("/:id", update);
-        router.delete("/:id", delete);
-
-        router
-    }
-}
 
 #[derive(Debug, Serialize)]
 struct User {
@@ -74,7 +29,7 @@ impl TryFrom<Row> for User {
     }
 }
 
-async fn index(app: Arc<App>, _request: Request) -> Result {
+pub async fn index(app: Arc<App>, _request: Request) -> Result {
     let rows: Vec<User> = Database::table("users")
         .select_all()
         .get(&app.database)
@@ -83,7 +38,7 @@ async fn index(app: Arc<App>, _request: Request) -> Result {
     Response::ok().json(&rows)?.produce()
 }
 
-async fn show(app: Arc<App>, request: Request) -> Result {
+pub async fn show(app: Arc<App>, request: Request) -> Result {
     let id: i32 = request.parameter("id")?;
 
     let user: User = Database::table("users")
@@ -95,7 +50,7 @@ async fn show(app: Arc<App>, request: Request) -> Result {
     Response::ok().json(&user)?.produce()
 }
 
-async fn create(app: Arc<App>, _request: Request) -> Result {
+pub async fn create(app: Arc<App>, _request: Request) -> Result {
     let user = User {
         id: 3,
         name: "Hello".to_string(),
@@ -109,7 +64,7 @@ async fn create(app: Arc<App>, _request: Request) -> Result {
     Response::created().json(&user)?.produce()
 }
 
-async fn update(app: Arc<App>, request: Request) -> Result {
+pub async fn update(app: Arc<App>, request: Request) -> Result {
     let user = User {
         id: request.parameter("id")?,
         name: "Super".to_string(),
@@ -123,7 +78,7 @@ async fn update(app: Arc<App>, request: Request) -> Result {
     Response::ok().json(&user)?.produce()
 }
 
-async fn delete(app: Arc<App>, request: Request) -> Result {
+pub async fn delete(app: Arc<App>, request: Request) -> Result {
     let id: i32 = request.parameter("id")?;
 
     Database::query("DELETE FROM users WHERE id=$1")
@@ -133,26 +88,3 @@ async fn delete(app: Arc<App>, request: Request) -> Result {
 
     Response::no_content().produce()
 }
-
-#[tokio::main]
-async fn main() {
-    let app = App::create().await.unwrap();
-
-    Server::builder()
-        .address(([127, 0, 0, 1], 8080))
-        .build()
-        .start(app)
-        .await;
-}
-
-#[cfg(test)]
-mod tests {
-  #[tokio::test]
-  async fn text_it_has_json() {
-      let app = App::fake().await.unwrap();
-      let response = app.get("/").send().await;
-
-      response.assert_ok().assert_is_json();
-  }
-}
-```
