@@ -1,8 +1,9 @@
-use crate::database::Database;
 use async_trait::async_trait;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::Error as PGError;
 use tokio_postgres::Row;
+
+use crate::database::Database;
 
 #[async_trait]
 pub trait Executor<'a> {

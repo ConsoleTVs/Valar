@@ -1,3 +1,10 @@
+use std::sync::Arc;
+
+use http::Request as BaseRequest;
+use hyper::Body;
+use regex::Error as RegexError;
+use regex::Regex;
+
 use crate::http::error::ErrorResponse;
 use crate::http::Method;
 use crate::http::Response;
@@ -7,11 +14,6 @@ use crate::routing::Route;
 use crate::routing::Router;
 use crate::Application;
 use crate::Error;
-use http::Request as BaseRequest;
-use hyper::Body;
-use regex::Error as RegexError;
-use regex::Regex;
-use std::sync::Arc;
 
 pub struct Matcher<App: Application>(Vec<(Regex, Route<App>)>);
 
@@ -29,15 +31,19 @@ impl<App: Application> Matcher<App> {
         Ok(Self(result?))
     }
 
-    /// Returns the route that matches the given method and URL path.
+    /// Returns the route that matches the given method and
+    /// URL path.
     pub fn find(&self, method: &Method, uri: &Uri) -> Option<&Route<App>> {
         self.0
             .iter()
-            .find(|(regex, route)| regex.is_match(uri.path()) && route.method() == method)
+            .find(|(regex, route)| {
+                regex.is_match(uri.path()) && route.method() == method
+            })
             .map(|(_, route)| route)
     }
 
-    /// Returns true if the given method and URI matches a route.
+    /// Returns true if the given method and URI matches a
+    /// route.
     pub fn matches(&self, method: &Method, uri: &Uri) -> bool {
         self.find(method, uri).is_some()
     }
@@ -46,8 +52,8 @@ impl<App: Application> Matcher<App> {
         let response = ErrorResponse::new().status(StatusCode::NOT_FOUND);
 
         match wants_json {
-            true => response.to_json_response(),
-            false => response.to_response(),
+            true => response.into_json_response(),
+            false => response.into_response(),
         }
     }
 
@@ -59,8 +65,8 @@ impl<App: Application> Matcher<App> {
         });
 
         match wants_json {
-            true => error.to_json_response(),
-            false => error.to_response(),
+            true => error.into_json_response(),
+            false => error.into_response(),
         }
     }
 
@@ -110,6 +116,10 @@ impl<App: Application> TryFrom<Router<App>> for Matcher<App> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+
     use crate::http::Method;
     use crate::http::Request;
     use crate::http::Result as ResponseResult;
@@ -118,8 +128,6 @@ mod tests {
     use crate::routing::Router;
     use crate::Application;
     use crate::Error;
-    use async_trait::async_trait;
-    use std::sync::Arc;
 
     struct App;
 

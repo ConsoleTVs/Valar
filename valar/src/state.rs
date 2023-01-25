@@ -7,7 +7,8 @@ impl<T> State<T> {
     /// Creates a new state instance.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::state::State;
     ///
     /// let state = State::new(0);
@@ -21,9 +22,10 @@ impl<T> State<T> {
     /// task until it is able to acquire the lock.
     ///
     /// # Example
-    /// ```
-    /// use valar::state::State;
+    ///
+    /// ```no_run
     /// use tokio::runtime::Runtime;
+    /// use valar::state::State;
     ///
     /// let state = State::new(0);
     ///
@@ -44,9 +46,10 @@ impl<T> State<T> {
     /// task until it is able to acquire the lock.
     ///
     /// # Example
-    /// ```
-    /// use valar::state::State;
+    ///
+    /// ```no_run
     /// use tokio::runtime::Runtime;
+    /// use valar::state::State;
     ///
     /// let state = State::new(0);
     ///
@@ -71,15 +74,17 @@ impl<T> State<T> {
     /// task until it is able to acquire the lock.
     ///
     /// This will not give you back a mutex guard therefore
-    /// it will not have to keep the lock open after the callback
-    /// has been executed. This is useful if you want to do something
-    /// with the value but don't want to keep the lock open nor manually
+    /// it will not have to keep the lock open after the
+    /// callback has been executed. This is useful if
+    /// you want to do something with the value but
+    /// don't want to keep the lock open nor manually
     /// unlock it / drop it.
     ///
     /// # Example
-    /// ```
-    /// use valar::state::State;
+    ///
+    /// ```no_run
     /// use tokio::runtime::Runtime;
+    /// use valar::state::State;
     ///
     /// let state = State::new(0);
     ///
@@ -111,7 +116,8 @@ impl<T: Clone> State<T> {
     /// task until it is able to acquire the lock.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::state::State;
     /// use tokio::runtime::Runtime;
     ///
@@ -132,13 +138,14 @@ impl<T: Clone> State<T> {
     /// This call is asynchronous and will block the current
     /// task until it is able to acquire the lock.
     ///
-    /// This is the same as the `map` method except that it will
-    /// return a clone of the new value.
+    /// This is the same as the `map` method except that it
+    /// will return a clone of the new value.
     ///
     /// # Example
-    /// ```
-    /// use valar::state::State;
+    ///
+    /// ```no_run
     /// use tokio::runtime::Runtime;
+    /// use valar::state::State;
     ///
     /// let state = State::new(0);
     ///

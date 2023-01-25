@@ -1,16 +1,16 @@
-use crate::http::StatusCode;
-use crate::http::Version;
+use std::collections::HashMap;
+
 use http::Response as BaseResponse;
 use http::Result as HttpResult;
 use hyper::Body;
 use serde::Serialize;
-use std::collections::HashMap;
-
 #[cfg(feature = "json")]
 use serde_json::Error as JsonError;
-
 #[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
+
+use crate::http::StatusCode;
+use crate::http::Version;
 
 /// A response is used to send a response back
 /// to the client.
@@ -39,17 +39,20 @@ impl Response {
         Self::builder().ok()
     }
 
-    /// Returns a response builder with a created status code.
+    /// Returns a response builder with a created status
+    /// code.
     pub fn created() -> ResponseBuilder {
         Self::builder().created()
     }
 
-    /// Returns a response builder with a no content status code.
+    /// Returns a response builder with a no content status
+    /// code.
     pub fn no_content() -> ResponseBuilder {
         Self::builder().no_content()
     }
 
-    /// Returns a response builder with a not found status code.
+    /// Returns a response builder with a not found status
+    /// code.
     pub fn not_found() -> ResponseBuilder {
         Self::builder().not_found()
     }
@@ -195,7 +198,8 @@ impl ResponseBuilder {
         self
     }
 
-    /// Sets the apropiate body and headers for a HTML response.
+    /// Sets the apropiate body and headers for a HTML
+    /// response.
     pub fn html<H>(mut self, html: H) -> Self
     where
         H: Into<String>,
@@ -219,7 +223,8 @@ impl ResponseBuilder {
         self
     }
 
-    /// Sets the apropiate body and headers for a JSON response.
+    /// Sets the apropiate body and headers for a JSON
+    /// response.
     #[cfg(feature = "json")]
     pub fn json<J>(mut self, json: &J) -> JsonResult<Self>
     where

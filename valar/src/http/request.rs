@@ -1,3 +1,13 @@
+use std::collections::HashMap;
+use std::str::FromStr;
+
+use http::Request as BaseRequest;
+use http::Result as HttpResult;
+use hyper::Body;
+use serde::Deserialize;
+#[cfg(feature = "json")]
+use serde_json::Result as JsonResult;
+
 use crate::http::ErrorResponse;
 use crate::http::FakeResponse;
 use crate::http::Method;
@@ -7,15 +17,6 @@ use crate::http::Version;
 use crate::Application;
 use crate::Error;
 use crate::FakeApplication;
-use http::Request as BaseRequest;
-use http::Result as HttpResult;
-use hyper::Body;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::str::FromStr;
-
-#[cfg(feature = "json")]
-use serde_json::Result as JsonResult;
 
 /// A request is used to store information about
 /// the incoming request.
@@ -54,17 +55,14 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use valar::http::Method;
+    /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .method(Method::GET)
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().method(Method::GET).uri(uri).build();
     ///
     /// assert_eq!(request.method(), &Method::GET);
     /// assert_eq!(request.uri().path(), "/");
@@ -79,17 +77,14 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use valar::http::Method;
+    /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .method(Method::GET)
-    ///     .build();
+    /// let request = Request::builder().method(Method::GET).build();
     ///
     /// assert_eq!(request.method(), &Method::GET);
     /// ```
-    ///
     pub fn method(&self) -> &Method {
         &self.method
     }
@@ -99,17 +94,14 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use valar::http::Method;
+    /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/foo");
     ///
-    /// let request = Request::builder()
-    ///     .method(Method::GET)
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().method(Method::GET).uri(uri).build();
     ///
     /// assert_eq!(request.uri().path(), "/foo");
     /// ```
@@ -121,13 +113,11 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Version;
     ///
-    /// let request = Request::builder()
-    ///     .version(Version::HTTP_11)
-    ///     .build();
+    /// let request = Request::builder().version(Version::HTTP_11).build();
     ///
     /// assert_eq!(request.version(), &Version::HTTP_11);
     /// ```
@@ -135,24 +125,25 @@ impl Request {
         &self.version
     }
 
-    /// Returns the headers of the HTTP request as a HashMap.
-    /// The keys are the header names and the values are the header values.
+    /// Returns the headers of the HTTP request as a
+    /// HashMap. The keys are the header names and the
+    /// values are the header values.
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Content-Type".to_string(), "application/json".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json")])
     ///     .build();
     ///
-    /// assert_eq!(request.headers().get("Content-Type").unwrap(), &"application/json".to_string());
+    /// assert_eq!(
+    ///     request.headers().get("Content-Type").unwrap(),
+    ///     &"application/json".to_string()
+    /// );
     /// ```
     pub fn headers(&self) -> &HashMap<String, String> {
         &self.headers
@@ -161,12 +152,11 @@ impl Request {
     /// Returns the body of the HTTP request.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .body("Hello World!")
-    ///     .build();
+    /// let request = Request::builder().body("Hello World!").build();
     ///
     /// assert_eq!(request.body(), "Hello World!");
     /// ```
@@ -178,16 +168,13 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Content-Type".to_string(), "application/json".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json")])
     ///     .build();
     ///
     /// assert_eq!(request.has_header("Content-Type"), true);
@@ -196,20 +183,18 @@ impl Request {
         self.headers().contains_key(key)
     }
 
-    /// Returns true if the request has the value in the given header.
+    /// Returns true if the request has the value in the
+    /// given header.
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Content-Type".to_string(), "application/json".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json")])
     ///     .build();
     ///
     /// assert_eq!(request.header_is("Content-Type", "application/json"), true);
@@ -218,26 +203,27 @@ impl Request {
         self.headers().get(key).map_or(false, |key| key == value)
     }
 
-    /// Returns true if the request contains the value in the given header.
-    /// This is useful for checking if the header contains a specific
-    /// subset of a string.
-    /// For example, if you want to check if the header contains the
-    /// character set "utf-8".
+    /// Returns true if the request contains the value in
+    /// the given header. This is useful for checking if
+    /// the header contains a specific subset of a
+    /// string. For example, if you want to check if the
+    /// header contains the character set "utf-8".
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Content-Type".to_string(), "application/json; charset=utf-8".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json; charset=utf-8")])
     ///     .build();
     ///
-    /// assert_eq!(request.header_contains("Content-Type", "charset=utf-8"), true);
+    /// assert_eq!(
+    ///     request.header_contains("Content-Type", "charset=utf-8"),
+    ///     true
+    /// );
     /// ```
     pub fn header_contains(&self, key: &str, value: &str) -> bool {
         self.headers()
@@ -245,22 +231,22 @@ impl Request {
             .map_or(false, |key| key.contains(value))
     }
 
-    /// Returns true if the request is considered to have a JSON body.
-    /// This is determined by the "Content-Type" header.
+    /// Returns true if the request is considered to have a
+    /// JSON body. This is determined by the
+    /// "Content-Type" header.
     ///
-    /// If the header is not present, this will return false.
+    /// If the header is not present, this will return
+    /// false.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Content-Type".to_string(), "application/json".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json")])
     ///     .body(r#"{"name": "John"}"#.to_string())
     ///     .build();
     ///
@@ -270,22 +256,22 @@ impl Request {
         self.header_contains("Content-Type", "application/json")
     }
 
-    /// Returns true if the request is considered to want a JSON response.
-    /// This is determined by the "Accept" header.
+    /// Returns true if the request is considered to want a
+    /// JSON response. This is determined by the
+    /// "Accept" header.
     ///
-    /// If the header is not present, this will return false.
+    /// If the header is not present, this will return
+    /// false.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let headers = HashMap::from([
-    ///     ("Accept".to_string(), "application/json".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
     /// let request = Request::builder()
-    ///     .headers(headers)
+    ///     .headers([("Content-Type", "application/json")])
     ///     .build();
     ///
     /// assert_eq!(request.wants_json(), true);
@@ -294,20 +280,17 @@ impl Request {
         self.header_contains("Accept", "application/json")
     }
 
-    /// Returns true is the route parameter is found in the request.
+    /// Returns true is the route parameter is found in the
+    /// request.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let parameters = HashMap::from([
-    ///     ("id".to_string(), "1".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .route_parameters(parameters)
-    ///     .build();
+    /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
     /// assert_eq!(request.has_parameter("id"), true);
     /// assert_eq!(request.has_parameter("name"), false);
@@ -316,20 +299,17 @@ impl Request {
         self.route_parameters.contains_key(name)
     }
 
-    /// Gets the given route parameter from the current route.
+    /// Gets the given route parameter from the current
+    /// route.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let parameters = HashMap::from([
-    ///     ("id".to_string(), "1".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .route_parameters(parameters)
-    ///     .build();
+    /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
     /// assert_eq!(request.maybe_parameter("id").unwrap(), &"1".to_string());
     /// assert_eq!(request.maybe_parameter("name"), None);
@@ -342,17 +322,13 @@ impl Request {
     /// the current route or returns an error.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let parameters = HashMap::from([
-    ///     ("id".to_string(), "1".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .route_parameters(parameters)
-    ///     .build();
+    /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
     /// assert_eq!(request.route_parameter("id").unwrap(), &"1".to_string());
     /// assert!(request.route_parameter("name").is_err());
@@ -365,23 +341,19 @@ impl Request {
         })
     }
 
-    /// Gets the given route parameter from the current route
-    /// and parses it to the given type.
-    /// This is useful for parsing route parameters to integers
-    /// or other types.
+    /// Gets the given route parameter from the current
+    /// route and parses it to the given type.
+    /// This is useful for parsing route parameters to
+    /// integers or other types.
     ///
     /// # Example
-    /// ```
-    /// use valar::http::Request;
+    ///
+    /// ```no_run
     /// use std::collections::HashMap;
     ///
-    /// let parameters = HashMap::from([
-    ///     ("id".to_string(), "1".to_string())
-    /// ]);
+    /// use valar::http::Request;
     ///
-    /// let request = Request::builder()
-    ///     .route_parameters(parameters)
-    ///     .build();
+    /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
     /// let id: u32 = request.parameter("id").unwrap();
     ///
@@ -401,15 +373,14 @@ impl Request {
     /// Returns the query parameters from the request.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().uri(uri).build();
     ///
     /// assert_eq!(request.query_parameters().get("id").unwrap(), "1");
     /// assert_eq!(request.query_parameters().get("name").unwrap(), "John");
@@ -418,9 +389,9 @@ impl Request {
         &self.query_parameters
     }
 
-    /// Creaates the query parameters from the request's URI.
-    /// This is used internally to create the query parameters
-    /// from the request's URI.
+    /// Creaates the query parameters from the request's
+    /// URI. This is used internally to create the query
+    /// parameters from the request's URI.
     pub(crate) fn query_parameters_from(value: &Uri) -> HashMap<String, String> {
         match value.path_and_query() {
             Some(query) => query
@@ -443,15 +414,14 @@ impl Request {
     /// Checks if the request has the given query parameter.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().uri(uri).build();
     ///
     /// assert!(request.has_query("id"));
     /// assert!(request.has_query("name"));
@@ -461,19 +431,19 @@ impl Request {
         self.query_parameters.contains_key(name)
     }
 
-    /// Gets the given query parameter from the request's URI.
-    /// If the query parameter does not exist, `None` is returned.
+    /// Gets the given query parameter from the request's
+    /// URI. If the query parameter does not exist,
+    /// `None` is returned.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().uri(uri).build();
     ///
     /// assert_eq!(request.maybe_query("id").unwrap(), "1");
     /// assert_eq!(request.maybe_query("name").unwrap(), "John");
@@ -483,19 +453,19 @@ impl Request {
         self.query_parameters.get(name)
     }
 
-    /// Gets the given query parameter from the request's URI.
-    /// If the query parameter does not exist, an error is returned.
+    /// Gets the given query parameter from the request's
+    /// URI. If the query parameter does not exist, an
+    /// error is returned.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().uri(uri).build();
     ///
     /// assert_eq!(request.query_parameter("id").unwrap(), "1");
     /// assert_eq!(request.query_parameter("name").unwrap(), "John");
@@ -509,22 +479,23 @@ impl Request {
         })
     }
 
-    /// Gets the given query parameter from the request's URI.
-    /// If the query parameter does not exist, an error is returned.
-    /// The query parameter is then parsed to the given type.
-    /// If the query parameter cannot be parsed, an error is returned.
-    /// This method is a shorthand for `query_parameter` and `parse`.
+    /// Gets the given query parameter from the request's
+    /// URI. If the query parameter does not exist, an
+    /// error is returned. The query parameter is then
+    /// parsed to the given type. If the query parameter
+    /// cannot be parsed, an error is returned.
+    /// This method is a shorthand for `query_parameter` and
+    /// `parse`.
     ///
     /// # Example
-    /// ```
+    ///
+    /// ```no_run
     /// use valar::http::Request;
     /// use valar::http::Uri;
     ///
     /// let uri = Uri::from_static("http://localhost:3000/?id=1&name=John");
     ///
-    /// let request = Request::builder()
-    ///     .uri(uri)
-    ///     .build();
+    /// let request = Request::builder().uri(uri).build();
     ///
     /// let id: u32 = request.query("id").unwrap();
     /// let name: String = request.query("name").unwrap();
@@ -547,18 +518,16 @@ impl Request {
     ///
     /// # Example
     ///
-    /// ```
-    /// use valar::http::Request;
+    /// ```no_run
     /// use serde::Deserialize;
+    /// use valar::http::Request;
     ///
     /// #[derive(Deserialize)]
     /// struct User {
-    ///     name: String
+    ///     name: String,
     /// }
     ///
-    /// let request = Request::builder()
-    ///     .body(r#"{"name": "John"}"#)
-    ///     .build();
+    /// let request = Request::builder().body(r#"{"name": "John"}"#).build();
     ///
     /// let user: User = request.json().unwrap();
     ///
@@ -600,7 +569,10 @@ impl RequestBuilder {
         self
     }
 
-    pub fn uri_str(mut self, uri: &str) -> Result<Self, <http::Uri as FromStr>::Err> {
+    pub fn uri_str(
+        mut self,
+        uri: &str,
+    ) -> Result<Self, <http::Uri as FromStr>::Err> {
         self.uri = Uri::from_str(uri)?;
 
         Ok(self)
@@ -618,8 +590,17 @@ impl RequestBuilder {
         self
     }
 
-    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
-        self.headers = headers;
+    pub fn headers<H, T>(mut self, headers: H) -> Self
+    where
+        H: Into<HashMap<T, T>>,
+        T: Into<String>,
+    {
+        let headers: HashMap<T, T> = headers.into();
+
+        self.headers = headers
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
 
         self
     }
@@ -633,8 +614,17 @@ impl RequestBuilder {
         self
     }
 
-    pub fn route_parameters(mut self, parameters: HashMap<String, String>) -> Self {
-        self.route_parameters = parameters;
+    pub fn route_parameters<P, T>(mut self, parameters: P) -> Self
+    where
+        P: Into<HashMap<T, T>>,
+        T: Into<String>,
+    {
+        let parameters: HashMap<T, T> = parameters.into();
+
+        self.route_parameters = parameters
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
 
         self
     }
@@ -700,8 +690,17 @@ impl<'a, App: Application> FakeRequest<'a, App> {
         self
     }
 
-    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
-        self.headers = headers;
+    pub fn headers<H, T>(mut self, headers: H) -> Self
+    where
+        H: Into<HashMap<T, T>>,
+        T: Into<String>,
+    {
+        let headers: HashMap<T, T> = headers.into();
+
+        self.headers = headers
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
 
         self
     }

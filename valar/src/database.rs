@@ -2,15 +2,15 @@ pub mod builder;
 pub mod executor;
 pub mod query;
 
-pub use crate::database::builder::QueryBuilder;
-pub use crate::database::executor::Executor;
-pub use crate::database::query::PendingQuery;
-
 pub use tokio_postgres::types::ToSql;
 pub use tokio_postgres::Client;
 pub use tokio_postgres::Config;
 pub use tokio_postgres::Error as PGError;
 pub use tokio_postgres::Row;
+
+pub use crate::database::builder::QueryBuilder;
+pub use crate::database::executor::Executor;
+pub use crate::database::query::PendingQuery;
 
 pub struct Database {
     client: Client,
@@ -18,7 +18,8 @@ pub struct Database {
 
 impl Database {
     pub async fn connect(url: &str) -> Result<Database, PGError> {
-        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
+        let (client, connection) =
+            tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {

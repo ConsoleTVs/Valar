@@ -1,12 +1,14 @@
-use crate::Application;
+use std::convert::Infallible;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use hyper::service::make_service_fn;
 use hyper::service::service_fn;
 use hyper::Server as BaseServer;
 use log::debug;
 use log::info;
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::Arc;
+
+use crate::Application;
 
 pub struct Server {
     address: SocketAddr,

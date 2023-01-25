@@ -1,5 +1,6 @@
-use crate::database::Executor;
 use tokio_postgres::types::ToSql;
+
+use crate::database::Executor;
 
 pub struct PendingQuery<'a> {
     statement: String,
@@ -28,7 +29,10 @@ impl<'a> PendingQuery<'a> {
     }
 
     #[must_use]
-    pub fn parameters<const N: usize>(mut self, value: [&'a (dyn ToSql + Sync); N]) -> Self {
+    pub fn parameters<const N: usize>(
+        mut self,
+        value: [&'a (dyn ToSql + Sync); N],
+    ) -> Self {
         self.parameters = Vec::from(value);
 
         self

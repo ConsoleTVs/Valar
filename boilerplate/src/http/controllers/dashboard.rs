@@ -1,6 +1,6 @@
-use crate::App;
-use serde::Serialize;
 use std::sync::Arc;
+
+use serde::Serialize;
 use tokio_postgres::Error as PGError;
 use valar::database::builder::Whereable;
 use valar::database::Database;
@@ -9,6 +9,8 @@ use valar::database::Row;
 use valar::http::Request;
 use valar::http::Response;
 use valar::http::Result;
+
+use crate::App;
 
 #[derive(Debug, Serialize)]
 struct User {

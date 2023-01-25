@@ -1,9 +1,11 @@
-use crate::http::Response;
-use crate::http::StatusCode;
+use std::collections::HashMap;
+
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
 use thiserror::Error;
+
+use crate::http::Response;
+use crate::http::StatusCode;
 
 #[derive(Serialize, Deserialize)]
 pub struct JsonError {
@@ -56,10 +58,34 @@ impl ErrorResponse {
             .clone()
             .unwrap_or_else(|| "Internal Server Error".to_string());
 
-        let mut headers =
-            HashMap::from([("Content-Type".to_string(), "application/json".to_string())]);
+        let mut headers = HashMap::from([(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        )]);
 
         headers.extend(self.headers.clone().unwrap_or_default());
+
+        let error = JsonError { message };
+
+        Response::builder()
+            .status(self.status)
+            .headers(headers)
+            .json_or(&error, format!(r#"{{ "message": "{}" }}"#, error.message))
+            .build()
+    }
+
+    #[cfg(feature = "json")]
+    pub fn into_json_response(self) -> Response {
+        let message = self
+            .message
+            .unwrap_or_else(|| "Internal Server Error".to_string());
+
+        let mut headers = HashMap::from([(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        )]);
+
+        headers.extend(self.headers.unwrap_or_default());
 
         let error = JsonError { message };
 
@@ -79,6 +105,18 @@ impl ErrorResponse {
         Response::builder()
             .status(self.status)
             .headers(self.headers.clone().unwrap_or_default())
+            .body(message)
+            .build()
+    }
+
+    pub fn into_response(self) -> Response {
+        let message = self
+            .message
+            .unwrap_or_else(|| "Internal Server Error".to_string());
+
+        Response::builder()
+            .status(self.status)
+            .headers(self.headers.unwrap_or_default())
             .body(message)
             .build()
     }
