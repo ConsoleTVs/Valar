@@ -1,3 +1,15 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use http::Request as BaseRequest;
+use http::StatusCode;
+use hyper::body::to_bytes;
+use hyper::body::HttpBody;
+use hyper::Body;
+use regex::Error as RegexError;
+use regex::Regex;
+
+use crate::http::headers::Headers;
 use crate::http::ErrorResponse;
 use crate::http::Handler;
 use crate::http::Method;
@@ -6,15 +18,6 @@ use crate::http::Result as HttpResult;
 use crate::http::Uri;
 use crate::Application;
 use crate::Error;
-use http::Request as BaseRequest;
-use http::StatusCode;
-use hyper::body::to_bytes;
-use hyper::body::HttpBody;
-use hyper::Body;
-use regex::Error as RegexError;
-use regex::Regex;
-use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Routes are used to match requests to handlers.
 /// They store information about the path, the HTTP method
@@ -59,7 +62,8 @@ impl<'a, App: Application> Route<App> {
         (self.handler)(app, request).await
     }
 
-    /// Returns the regex string literal for the given route.
+    /// Returns the regex string literal for the given
+    /// route.
     fn to_regex_string(&self) -> String {
         let regex_path = self
             .path
@@ -92,7 +96,8 @@ impl<'a, App: Application> Route<App> {
             .zip(uri.path().trim_matches('/').split('/'))
             .filter_map(|(route_segment, path_segment)| {
                 route_segment.starts_with(':').then(|| {
-                    let parameter = route_segment.trim_start_matches(':').to_string();
+                    let parameter =
+                        route_segment.trim_start_matches(':').to_string();
                     let value = path_segment.to_string();
 
                     (parameter, value)
@@ -102,8 +107,12 @@ impl<'a, App: Application> Route<App> {
     }
 
     /// Turns a request into a base `Request` object.
-    pub(crate) async fn to_request(&self, base: &mut BaseRequest<Body>) -> Result<Request, Error> {
-        // TODO: Allow this to be dynamic. Current hardcoded 2MB limit.
+    pub(crate) async fn to_request(
+        &self,
+        base: &mut BaseRequest<Body>,
+    ) -> Result<Request, Error> {
+        // TODO: Allow this to be dynamic. Current hardcoded 2MB
+        // limit.
         const MAX_ALLOWED_RESPONSE_SIZE: u64 = 1024 * 1024 * 2;
 
         let content_length = base
@@ -122,7 +131,7 @@ impl<'a, App: Application> Route<App> {
 
         let bytes = to_bytes(base.body_mut()).await?;
 
-        let headers: HashMap<String, String> = base
+        let headers: Headers = base
             .headers()
             .iter()
             .map(|(key, value)| {
@@ -149,6 +158,10 @@ impl<'a, App: Application> Route<App> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+
     use crate::http::Method;
     use crate::http::Request;
     use crate::http::Result as ResponseResult;
@@ -157,8 +170,6 @@ mod tests {
     use crate::routing::Router;
     use crate::Application;
     use crate::Error;
-    use async_trait::async_trait;
-    use std::sync::Arc;
 
     struct App;
 

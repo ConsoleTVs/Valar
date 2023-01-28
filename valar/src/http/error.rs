@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::http::headers::Headers;
 use crate::http::Response;
 use crate::http::StatusCode;
 
@@ -22,7 +21,7 @@ pub struct ErrorResponse {
     message: Option<String>,
 
     /// Additional Headers to include in the response.
-    headers: Option<HashMap<String, String>>,
+    headers: Option<Headers>,
 }
 
 impl ErrorResponse {
@@ -45,33 +44,13 @@ impl ErrorResponse {
         self
     }
 
-    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
-        self.headers = Some(headers);
+    pub fn headers<H>(mut self, headers: H) -> Self
+    where
+        H: Into<Headers>,
+    {
+        self.headers = Some(headers.into());
 
         self
-    }
-
-    #[cfg(feature = "json")]
-    pub fn to_json_response(&self) -> Response {
-        let message = self
-            .message
-            .clone()
-            .unwrap_or_else(|| "Internal Server Error".to_string());
-
-        let mut headers = HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]);
-
-        headers.extend(self.headers.clone().unwrap_or_default());
-
-        let error = JsonError { message };
-
-        Response::builder()
-            .status(self.status)
-            .headers(headers)
-            .json_or(&error, format!(r#"{{ "message": "{}" }}"#, error.message))
-            .build()
     }
 
     #[cfg(feature = "json")]
@@ -80,12 +59,11 @@ impl ErrorResponse {
             .message
             .unwrap_or_else(|| "Internal Server Error".to_string());
 
-        let mut headers = HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]);
+        let mut headers = Headers::from([("Content-Type", "application/json")]);
 
-        headers.extend(self.headers.unwrap_or_default());
+        if let Some(other) = self.headers {
+            headers.extend(other);
+        }
 
         let error = JsonError { message };
 
@@ -93,19 +71,6 @@ impl ErrorResponse {
             .status(self.status)
             .headers(headers)
             .json_or(&error, format!(r#"{{ "message": "{}" }}"#, error.message))
-            .build()
-    }
-
-    pub fn to_response(&self) -> Response {
-        let message = self
-            .message
-            .clone()
-            .unwrap_or_else(|| "Internal Server Error".to_string());
-
-        Response::builder()
-            .status(self.status)
-            .headers(self.headers.clone().unwrap_or_default())
-            .body(message)
             .build()
     }
 

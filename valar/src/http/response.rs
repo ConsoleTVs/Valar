@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use http::Response as BaseResponse;
 use http::Result as HttpResult;
 use hyper::Body;
@@ -9,6 +7,7 @@ use serde_json::Error as JsonError;
 #[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
+use crate::http::headers::Headers;
 use crate::http::StatusCode;
 use crate::http::Version;
 
@@ -22,7 +21,7 @@ pub struct Response {
     version: Version,
 
     /// The response's headers
-    headers: HashMap<String, String>,
+    headers: Headers,
 
     /// The body of the response.
     body: String,
@@ -57,49 +56,45 @@ impl Response {
         Self::builder().not_found()
     }
 
+    /// Returns the response status code.
     pub fn status(&self) -> &StatusCode {
         &self.status
     }
 
+    /// Returns the response's HTTP version.
     pub fn version(&self) -> &Version {
         &self.version
     }
 
-    pub fn headers(&self) -> &HashMap<String, String> {
+    /// Returns the response's headers.
+    pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
-    pub fn has_header(&self, key: &str) -> bool {
-        self.headers().contains_key(key)
-    }
-
-    pub fn header_is(&self, key: &str, value: &str) -> bool {
-        self.headers()
-            .get(key)
-            .map(|key| key == value)
-            .unwrap_or(false)
-    }
-
-    pub fn header_contains(&self, key: &str, value: &str) -> bool {
-        self.headers()
-            .get(key)
-            .map(|key| key.contains(value))
-            .unwrap_or(false)
-    }
-
-    pub fn is_json(&self) -> bool {
-        self.header_contains("Content-Type", "application/json")
-    }
-
+    /// Returns the response's body.
     pub fn body(&self) -> &String {
         &self.body
     }
 
+    /// Determines if the given header exists.
+    pub fn has_header(&self, key: &str) -> bool {
+        self.headers().has(key)
+    }
+
+    /// Determines if the response contains a JSON value
+    /// based on the Content-Type header.
+    pub fn is_json(&self) -> bool {
+        self.headers().contains("Content-Type", "application/json")
+    }
+
+    /// Transforms the response to a hyper Response.
     pub(crate) fn into_base_response(self) -> HttpResult<BaseResponse<Body>> {
         let mut builder = BaseResponse::builder();
 
-        for (key, value) in &self.headers {
-            builder = builder.header(key, value);
+        for (header, values) in self.headers {
+            for value in values {
+                builder = builder.header(&header, value);
+            }
         }
 
         builder
@@ -117,7 +112,7 @@ pub struct ResponseBuilder {
     version: Version,
 
     /// The response's headers
-    headers: HashMap<String, String>,
+    headers: Headers,
 
     /// The body of the response.
     body: String,
@@ -137,14 +132,21 @@ impl ResponseBuilder {
     }
 
     /// Add a header to the response.
-    pub fn header(mut self, key: String, value: String) -> Self {
-        self.headers.insert(key, value);
+    pub fn header<V>(mut self, header: &str, value: V) -> Self
+    where
+        V: Into<String>,
+    {
+        self.headers.append(header, value.into());
 
         self
     }
 
     /// Set the headers of the request.
-    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
+    pub fn headers<H>(mut self, headers: H) -> Self
+    where
+        H: Into<Headers>,
+    {
+        let headers: Headers = headers.into();
         self.headers = headers;
 
         self
@@ -160,38 +162,44 @@ impl ResponseBuilder {
         self
     }
 
+    /// Sets the status code to OK.
     pub fn ok(self) -> Self {
         self.status(StatusCode::OK)
     }
 
+    /// Sets the status code to CREATED.
     pub fn created(self) -> Self {
         self.status(StatusCode::CREATED)
     }
 
+    /// Sets the status code to NO CONTENT.
     pub fn no_content(self) -> Self {
         self.status(StatusCode::NO_CONTENT)
     }
 
-    pub fn unauthorized(mut self, challenges: String) -> Self {
-        self.headers
-            .insert("WWW-Authenticate".to_string(), challenges);
+    /// Sets the status code to UNAUTHORIZED.
+    pub fn unauthorized(mut self, challenges: &str) -> Self {
+        self.headers.insert("WWW-Authenticate", challenges);
         self.status = StatusCode::UNAUTHORIZED;
 
         self
     }
 
+    /// Sets the status code to NOT FOUND.
     pub fn not_found(mut self) -> Self {
         self.status = StatusCode::NOT_FOUND;
 
         self
     }
 
+    /// Sets the status code to METHOD NOT ALLOWED.
     pub fn method_not_allowed(mut self) -> Self {
         self.status = StatusCode::METHOD_NOT_ALLOWED;
 
         self
     }
 
+    /// Sets the status code to INTERNAL SERVER ERROR.
     pub fn internal_server_error(mut self) -> Self {
         self.status = StatusCode::INTERNAL_SERVER_ERROR;
 
@@ -204,8 +212,7 @@ impl ResponseBuilder {
     where
         H: Into<String>,
     {
-        self.headers
-            .insert("Content-Type".to_string(), "text/html".to_string());
+        self.headers.insert("Content-Type", "text/html");
         self.body = html.into();
 
         self
@@ -216,8 +223,7 @@ impl ResponseBuilder {
     where
         T: Into<String>,
     {
-        self.headers
-            .insert("Content-Type".to_string(), "text/plain".to_string());
+        self.headers.insert("Content-Type", "text/plain");
         self.body = text.into();
 
         self
@@ -230,8 +236,7 @@ impl ResponseBuilder {
     where
         J: Serialize,
     {
-        self.headers
-            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.headers.insert("Content-Type", "application/json");
         self.body = serde_json::to_string(json)?;
 
         Ok(self)
@@ -242,8 +247,7 @@ impl ResponseBuilder {
     where
         J: Serialize,
     {
-        self.headers
-            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.headers.insert("Content-Type", "application/json");
         self.body = serde_json::to_string(json).unwrap_or(default);
 
         self
@@ -255,8 +259,7 @@ impl ResponseBuilder {
         J: Serialize,
         D: Fn(JsonError) -> String,
     {
-        self.headers
-            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.headers.insert("Content-Type", "application/json");
         self.body = serde_json::to_string(json).unwrap_or_else(default);
 
         self
@@ -290,7 +293,7 @@ impl Default for ResponseBuilder {
         Self {
             status: StatusCode::OK,
             version: Version::HTTP_11,
-            headers: HashMap::new(),
+            headers: Headers::new(),
             body: String::new(),
         }
     }
@@ -346,13 +349,13 @@ impl FakeResponse {
     }
 
     pub fn assert_header_is(&self, key: &str, value: &str) -> &Self {
-        assert!(self.0.header_is(key, value));
+        assert!(self.0.headers().is(key, value));
 
         self
     }
 
     pub fn assert_header_contains(&self, key: &str, value: &str) -> &Self {
-        assert!(self.0.header_contains(key, value));
+        assert!(self.0.headers().contains(key, value));
 
         self
     }

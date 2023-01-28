@@ -8,6 +8,7 @@ use serde::Deserialize;
 #[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
+use crate::http::headers::Headers;
 use crate::http::ErrorResponse;
 use crate::http::FakeResponse;
 use crate::http::Method;
@@ -37,7 +38,7 @@ pub struct Request {
     pub(crate) version: Version,
 
     /// The request's headers
-    pub(crate) headers: HashMap<String, String>,
+    pub(crate) headers: Headers,
 
     /// The request's body
     pub(crate) body: String,
@@ -140,12 +141,9 @@ impl Request {
     ///     .headers([("Content-Type", "application/json")])
     ///     .build();
     ///
-    /// assert_eq!(
-    ///     request.headers().get("Content-Type").unwrap(),
-    ///     &"application/json".to_string()
-    /// );
+    /// assert!(request.headers().is("Content-Type", "application/json"));
     /// ```
-    pub fn headers(&self) -> &HashMap<String, String> {
+    pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
@@ -162,73 +160,6 @@ impl Request {
     /// ```
     pub fn body(&self) -> &String {
         &self.body
-    }
-
-    /// Determines if the request has the given header.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::collections::HashMap;
-    ///
-    /// use valar::http::Request;
-    ///
-    /// let request = Request::builder()
-    ///     .headers([("Content-Type", "application/json")])
-    ///     .build();
-    ///
-    /// assert_eq!(request.has_header("Content-Type"), true);
-    /// ```
-    pub fn has_header(&self, key: &str) -> bool {
-        self.headers().contains_key(key)
-    }
-
-    /// Returns true if the request has the value in the
-    /// given header.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::collections::HashMap;
-    ///
-    /// use valar::http::Request;
-    ///
-    /// let request = Request::builder()
-    ///     .headers([("Content-Type", "application/json")])
-    ///     .build();
-    ///
-    /// assert_eq!(request.header_is("Content-Type", "application/json"), true);
-    /// ```
-    pub fn header_is(&self, key: &str, value: &str) -> bool {
-        self.headers().get(key).map_or(false, |key| key == value)
-    }
-
-    /// Returns true if the request contains the value in
-    /// the given header. This is useful for checking if
-    /// the header contains a specific subset of a
-    /// string. For example, if you want to check if the
-    /// header contains the character set "utf-8".
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::collections::HashMap;
-    ///
-    /// use valar::http::Request;
-    ///
-    /// let request = Request::builder()
-    ///     .headers([("Content-Type", "application/json; charset=utf-8")])
-    ///     .build();
-    ///
-    /// assert_eq!(
-    ///     request.header_contains("Content-Type", "charset=utf-8"),
-    ///     true
-    /// );
-    /// ```
-    pub fn header_contains(&self, key: &str, value: &str) -> bool {
-        self.headers()
-            .get(key)
-            .map_or(false, |key| key.contains(value))
     }
 
     /// Returns true if the request is considered to have a
@@ -253,7 +184,7 @@ impl Request {
     /// assert_eq!(request.is_json(), true);
     /// ```
     pub fn is_json(&self) -> bool {
-        self.header_contains("Content-Type", "application/json")
+        self.headers().contains("Content-Type", "application/json")
     }
 
     /// Returns true if the request is considered to want a
@@ -277,7 +208,7 @@ impl Request {
     /// assert_eq!(request.wants_json(), true);
     /// ```
     pub fn wants_json(&self) -> bool {
-        self.header_contains("Accept", "application/json")
+        self.headers().contains("Accept", "application/json")
     }
 
     /// Returns true is the route parameter is found in the
@@ -547,7 +478,7 @@ pub struct RequestBuilder {
     method: Method,
     uri: Uri,
     version: Version,
-    headers: HashMap<String, String>,
+    headers: Headers,
     body: String,
     route_parameters: HashMap<String, String>,
 }
@@ -585,22 +516,17 @@ impl RequestBuilder {
     }
 
     pub fn header(mut self, key: &str, value: &str) -> Self {
-        self.headers.insert(key.to_string(), value.to_string());
+        self.headers.append(key, value);
 
         self
     }
 
-    pub fn headers<H, T>(mut self, headers: H) -> Self
+    pub fn headers<H>(mut self, headers: H) -> Self
     where
-        H: Into<HashMap<T, T>>,
-        T: Into<String>,
+        H: Into<Headers>,
     {
-        let headers: HashMap<T, T> = headers.into();
-
-        self.headers = headers
-            .into_iter()
-            .map(|(key, value)| (key.into(), value.into()))
-            .collect();
+        let headers: Headers = headers.into();
+        self.headers = headers;
 
         self
     }
@@ -647,7 +573,7 @@ pub struct FakeRequest<'a, App: Application> {
     method: Method,
     uri: Uri,
     version: Version,
-    headers: HashMap<String, String>,
+    headers: Headers,
     body: String,
 }
 
@@ -658,7 +584,7 @@ impl<'a, App: Application> FakeRequest<'a, App> {
             method: Method::default(),
             uri: Uri::default(),
             version: Version::default(),
-            headers: HashMap::default(),
+            headers: Headers::default(),
             body: String::default(),
         }
     }
@@ -690,17 +616,11 @@ impl<'a, App: Application> FakeRequest<'a, App> {
         self
     }
 
-    pub fn headers<H, T>(mut self, headers: H) -> Self
+    pub fn headers<H>(mut self, headers: H) -> Self
     where
-        H: Into<HashMap<T, T>>,
-        T: Into<String>,
+        H: Into<Headers>,
     {
-        let headers: HashMap<T, T> = headers.into();
-
-        self.headers = headers
-            .into_iter()
-            .map(|(key, value)| (key.into(), value.into()))
-            .collect();
+        self.headers = headers.into();
 
         self
     }
@@ -710,7 +630,7 @@ impl<'a, App: Application> FakeRequest<'a, App> {
         K: Into<String>,
         V: Into<String>,
     {
-        self.headers.insert(key.into(), value.into());
+        self.headers.append(key.into(), value.into());
 
         self
     }
@@ -724,21 +644,25 @@ impl<'a, App: Application> FakeRequest<'a, App> {
         self
     }
 
-    fn to_base_request(&self) -> HttpResult<BaseRequest<Body>> {
+    fn into_base_request(self) -> HttpResult<BaseRequest<Body>> {
         let mut request = BaseRequest::builder()
             .method(self.method.clone())
             .uri(self.uri.clone());
 
-        for (key, value) in &self.headers {
-            request = request.header(key, value);
+        for (key, values) in self.headers {
+            for value in values {
+                request = request.header(&key, value);
+            }
         }
 
         request.body(Body::from(self.body.clone()))
     }
 
-    pub async fn send(&self) -> FakeResponse {
-        let request = self.to_base_request().unwrap_or_default();
-        let response = self.app.matcher().handle(self.app.app_arc(), request).await;
+    pub async fn send(self) -> FakeResponse {
+        let matcher = self.app.matcher();
+        let app = self.app.app_arc();
+        let request = self.into_base_request().unwrap_or_default();
+        let response = matcher.handle(app, request).await;
 
         FakeResponse::new(response)
     }
