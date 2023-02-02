@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
 use crate::http::FakeRequest;
 use crate::http::Method;
 use crate::routing::router::Routable;
 use crate::routing::Matcher;
 use crate::Error;
-use async_trait::async_trait;
-use std::sync::Arc;
 
 #[async_trait]
 pub trait Application: Routable<Application = Self> + Sized {
@@ -45,10 +47,12 @@ pub trait Application: Routable<Application = Self> + Sized {
         Ok(fake)
     }
 
-    /// Returns a fake application and calls the given callback.
+    /// Returns a fake application and calls the given
+    /// callback.
     ///
-    /// This allows modifying the application before creating
-    /// the fake application, therefore allowing mutations to it.
+    /// This allows modifying the application before
+    /// creating the fake application, therefore
+    /// allowing mutations to it.
     async fn fake_and<F>(callback: F) -> Result<FakeApplication<Self>, Error>
     where
         F: FnOnce(&mut Self) + Send,

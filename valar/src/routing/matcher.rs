@@ -83,7 +83,7 @@ impl<App: Application> Matcher<App> {
     pub(crate) async fn handle(
         &self,
         application: Arc<App>,
-        mut request: BaseRequest<Body>,
+        request: BaseRequest<Body>,
     ) -> Response {
         let wants_json = Self::wants_json(&request);
 
@@ -92,7 +92,7 @@ impl<App: Application> Matcher<App> {
             None => return self.not_found(wants_json),
         };
 
-        let request = match route.to_request(&mut request).await {
+        let request = match route.into_request(request).await {
             Ok(request) => request,
             Err(error) => return Self::error_response(wants_json, error),
         };

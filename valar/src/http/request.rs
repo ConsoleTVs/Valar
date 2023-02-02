@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use http::Request as BaseRequest;
@@ -8,10 +9,13 @@ use serde::Deserialize;
 #[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
-use crate::http::headers::Headers;
+use crate::http::cookies::HasCookies;
+use crate::http::headers::HasHeaders;
 use crate::http::ErrorResponse;
 use crate::http::FakeResponse;
+use crate::http::Headers;
 use crate::http::Method;
+use crate::http::RequestCookie;
 use crate::http::StatusCode;
 use crate::http::Uri;
 use crate::http::Version;
@@ -29,25 +33,25 @@ use crate::FakeApplication;
 pub struct Request {
     /// Stores the full request URI.
     /// The request's method
-    pub(crate) method: Method,
+    method: Method,
 
     /// The request's URI
-    pub(crate) uri: Uri,
+    uri: Uri,
 
     /// The request's version
-    pub(crate) version: Version,
+    version: Version,
 
     /// The request's headers
-    pub(crate) headers: Headers,
+    headers: Headers,
 
     /// The request's body
-    pub(crate) body: String,
+    body: String,
 
     /// The URL parameters.
-    pub(crate) route_parameters: HashMap<String, String>,
+    route_parameters: HashMap<String, String>,
 
     /// The URI query parameters.
-    pub(crate) query_parameters: HashMap<String, String>,
+    query_parameters: HashMap<String, String>,
 }
 
 impl Request {
@@ -126,27 +130,6 @@ impl Request {
         &self.version
     }
 
-    /// Returns the headers of the HTTP request as a
-    /// HashMap. The keys are the header names and the
-    /// values are the header values.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::collections::HashMap;
-    ///
-    /// use valar::http::Request;
-    ///
-    /// let request = Request::builder()
-    ///     .headers([("Content-Type", "application/json")])
-    ///     .build();
-    ///
-    /// assert!(request.headers().is("Content-Type", "application/json"));
-    /// ```
-    pub fn headers(&self) -> &Headers {
-        &self.headers
-    }
-
     /// Returns the body of the HTTP request.
     ///
     /// # Example
@@ -158,7 +141,7 @@ impl Request {
     ///
     /// assert_eq!(request.body(), "Hello World!");
     /// ```
-    pub fn body(&self) -> &String {
+    pub fn body(&self) -> &str {
         &self.body
     }
 
@@ -242,11 +225,11 @@ impl Request {
     ///
     /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
-    /// assert_eq!(request.maybe_parameter("id").unwrap(), &"1".to_string());
+    /// assert_eq!(request.maybe_parameter("id").unwrap(), "1");
     /// assert_eq!(request.maybe_parameter("name"), None);
     /// ```
-    pub fn maybe_parameter(&self, name: &str) -> Option<&String> {
-        self.route_parameters.get(name)
+    pub fn maybe_parameter(&self, name: &str) -> Option<&str> {
+        self.route_parameters.get(name).map(|name| name.deref())
     }
 
     /// Gets the given route parameter from
@@ -261,10 +244,10 @@ impl Request {
     ///
     /// let request = Request::builder().route_parameters([("id", "1")]).build();
     ///
-    /// assert_eq!(request.route_parameter("id").unwrap(), &"1".to_string());
+    /// assert_eq!(request.route_parameter("id").unwrap(), "1");
     /// assert!(request.route_parameter("name").is_err());
     /// ```
-    pub fn route_parameter(&self, name: &str) -> Result<&String, ErrorResponse> {
+    pub fn route_parameter(&self, name: &str) -> Result<&str, ErrorResponse> {
         self.maybe_parameter(name).ok_or_else(|| {
             ErrorResponse::new()
                 .message(format!("Unknown route parameter: `{}`", name))
@@ -380,8 +363,8 @@ impl Request {
     /// assert_eq!(request.maybe_query("name").unwrap(), "John");
     /// assert!(request.maybe_query("age").is_none());
     /// ```
-    pub fn maybe_query(&self, name: &str) -> Option<&String> {
-        self.query_parameters.get(name)
+    pub fn maybe_query(&self, name: &str) -> Option<&str> {
+        self.query_parameters.get(name).map(|query| query.deref())
     }
 
     /// Gets the given query parameter from the request's
@@ -402,7 +385,7 @@ impl Request {
     /// assert_eq!(request.query_parameter("name").unwrap(), "John");
     /// assert!(request.query_parameter("age").is_err());
     /// ```
-    pub fn query_parameter(&self, name: &str) -> Result<&String, ErrorResponse> {
+    pub fn query_parameter(&self, name: &str) -> Result<&str, ErrorResponse> {
         self.maybe_query(name).ok_or_else(|| {
             ErrorResponse::new()
                 .message(format!("Unknown query parameter: `{}`", name))
@@ -473,6 +456,33 @@ impl Request {
     }
 }
 
+impl HasHeaders for Request {
+    /// Returns the headers of the HTTP request as a
+    /// HashMap. The keys are the header names and the
+    /// values are the header values.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::collections::HashMap;
+    ///
+    /// use valar::http::Request;
+    ///
+    /// let request = Request::builder()
+    ///     .headers([("Content-Type", "application/json")])
+    ///     .build();
+    ///
+    /// assert!(request.headers().is("Content-Type", "application/json"));
+    /// ```
+    fn headers(&self) -> &Headers {
+        &self.headers
+    }
+}
+
+impl HasCookies for Request {
+    type Item = RequestCookie;
+}
+
 #[derive(Default)]
 pub struct RequestBuilder {
     method: Method,
@@ -492,6 +502,15 @@ impl RequestBuilder {
         self.method = method;
 
         self
+    }
+
+    pub fn cookie<C>(self, cookie: C) -> Self
+    where
+        C: Into<RequestCookie>,
+    {
+        let cookie: RequestCookie = cookie.into();
+
+        self.header("Cookie", cookie.to_string())
     }
 
     pub fn uri(mut self, uri: Uri) -> Self {
@@ -515,8 +534,12 @@ impl RequestBuilder {
         self
     }
 
-    pub fn header(mut self, key: &str, value: &str) -> Self {
-        self.headers.append(key, value);
+    pub fn header<H, V>(mut self, header: H, value: V) -> Self
+    where
+        H: Into<String>,
+        V: Into<String>,
+    {
+        self.headers.append(header, value);
 
         self
     }
@@ -649,10 +672,8 @@ impl<'a, App: Application> FakeRequest<'a, App> {
             .method(self.method.clone())
             .uri(self.uri.clone());
 
-        for (key, values) in self.headers {
-            for value in values {
-                request = request.header(&key, value);
-            }
+        for (key, value) in self.headers {
+            request = request.header(key, value);
         }
 
         request.body(Body::from(self.body.clone()))

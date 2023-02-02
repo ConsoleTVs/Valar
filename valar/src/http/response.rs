@@ -7,7 +7,10 @@ use serde_json::Error as JsonError;
 #[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
-use crate::http::headers::Headers;
+use crate::http::cookies::HasCookies;
+use crate::http::headers::HasHeaders;
+use crate::http::Headers;
+use crate::http::ResponseCookie;
 use crate::http::StatusCode;
 use crate::http::Version;
 
@@ -66,13 +69,8 @@ impl Response {
         &self.version
     }
 
-    /// Returns the response's headers.
-    pub fn headers(&self) -> &Headers {
-        &self.headers
-    }
-
     /// Returns the response's body.
-    pub fn body(&self) -> &String {
+    pub fn body(&self) -> &str {
         &self.body
     }
 
@@ -91,10 +89,8 @@ impl Response {
     pub(crate) fn into_base_response(self) -> HttpResult<BaseResponse<Body>> {
         let mut builder = BaseResponse::builder();
 
-        for (header, values) in self.headers {
-            for value in values {
-                builder = builder.header(&header, value);
-            }
+        for (header, value) in self.headers {
+            builder = builder.header(header, value);
         }
 
         builder
@@ -102,6 +98,17 @@ impl Response {
             .version(self.version)
             .body(Body::from(self.body))
     }
+}
+
+impl HasHeaders for Response {
+    /// Returns the response's headers.
+    fn headers(&self) -> &Headers {
+        &self.headers
+    }
+}
+
+impl HasCookies for Response {
+    type Item = ResponseCookie;
 }
 
 pub struct ResponseBuilder {
@@ -131,12 +138,33 @@ impl ResponseBuilder {
         self
     }
 
-    /// Add a header to the response.
+    /// Sets a header to the response.
     pub fn header<V>(mut self, header: &str, value: V) -> Self
     where
         V: Into<String>,
     {
+        self.headers.insert(header, value.into());
+
+        self
+    }
+
+    /// Appends a header to the response.
+    pub fn append_header<V>(mut self, header: &str, value: V) -> Self
+    where
+        V: Into<String>,
+    {
         self.headers.append(header, value.into());
+
+        self
+    }
+
+    /// Add a cookie to the response.
+    pub fn cookie<C>(mut self, cookie: C) -> Self
+    where
+        C: Into<ResponseCookie>,
+    {
+        let cookie: ResponseCookie = cookie.into();
+        self.headers.append("Set-Header", cookie.to_string());
 
         self
     }

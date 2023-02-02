@@ -1,11 +1,12 @@
+use std::future::Future;
+use std::sync::Arc;
+
 use crate::http::Method;
 use crate::http::Request;
 use crate::http::Response;
 use crate::routing::Matcher;
 use crate::routing::Route;
 use crate::Application;
-use std::future::Future;
-use std::sync::Arc;
 
 /// A router is used to store routes and match them
 /// against requests.
@@ -17,12 +18,17 @@ pub struct Router<App: Application> {
 
 impl<App: Application> Router<App> {
     /// Creates a new router.
-    pub fn new(routes: Vec<Route<App>>) -> Self {
-        Self { routes }
+    pub fn new<R>(routes: R) -> Self
+    where
+        R: Into<Vec<Route<App>>>,
+    {
+        Self {
+            routes: routes.into(),
+        }
     }
 
     /// Returns the routes of the router.
-    pub fn routes(&self) -> &Vec<Route<App>> {
+    pub fn routes(&self) -> &[Route<App>] {
         &self.routes
     }
 
@@ -31,7 +37,8 @@ impl<App: Application> Router<App> {
         self.routes.push(route);
     }
 
-    /// Determines if the router has a route that matches the given criteria.
+    /// Determines if the router has a route that matches
+    /// the given criteria.
     pub fn has_route(&self, path: &str, method: &Method) -> bool {
         self.routes
             .iter()
@@ -70,8 +77,8 @@ impl<App: Application> Router<App> {
 }
 
 impl<App: Application> IntoIterator for Router<App> {
-    type Item = Route<App>;
     type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = Route<App>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.routes.into_iter()

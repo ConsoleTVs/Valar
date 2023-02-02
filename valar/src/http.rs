@@ -12,7 +12,13 @@ use std::result::Result as BaseResult;
 use std::sync::Arc;
 
 pub use client::Client;
+pub use cookies::Cookie;
+pub use cookies::HasCookies;
+pub use cookies::RequestCookie;
+pub use cookies::ResponseCookie;
 pub use error::ErrorResponse;
+pub use headers::HasHeaders;
+pub use headers::Headers;
 pub use http::Method;
 pub use http::StatusCode;
 pub use http::Uri;

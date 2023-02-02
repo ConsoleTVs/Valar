@@ -48,7 +48,7 @@ impl<'a, App: Application> Route<App> {
     }
 
     /// Returns the path of the route.
-    pub fn path(&self) -> &String {
+    pub fn path(&self) -> &str {
         &self.path
     }
 
@@ -107,9 +107,9 @@ impl<'a, App: Application> Route<App> {
     }
 
     /// Turns a request into a base `Request` object.
-    pub(crate) async fn to_request(
+    pub(crate) async fn into_request(
         &self,
-        base: &mut BaseRequest<Body>,
+        mut base: BaseRequest<Body>,
     ) -> Result<Request, Error> {
         // TODO: Allow this to be dynamic. Current hardcoded 2MB
         // limit.
@@ -142,15 +142,14 @@ impl<'a, App: Application> Route<App> {
             })
             .collect();
 
-        let request = Request {
-            route_parameters: self.parameters(base.uri()),
-            query_parameters: Request::query_parameters_from(base.uri()),
-            method: base.method().clone(),
-            uri: base.uri().clone(),
-            version: base.version(),
-            headers,
-            body: bytes.escape_ascii().to_string(),
-        };
+        let request = Request::builder()
+            .route_parameters(self.parameters(base.uri()))
+            .method(base.method().clone())
+            .uri(base.uri().clone())
+            .version(base.version().clone())
+            .headers(headers)
+            .body(bytes.escape_ascii().to_string())
+            .build();
 
         Ok(request)
     }
