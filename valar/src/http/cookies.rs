@@ -127,8 +127,9 @@ impl ResponseCookie {
     /// # Example
     /// ```no_run
     /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").build();
+    /// let cookie = ResponseCookie::builder("name", "value").build();
     ///
     /// assert_eq!(cookie.name(), "name");
     /// assert_eq!(cookie.value(), "value");
@@ -142,13 +143,15 @@ impl ResponseCookie {
     }
 
     /// Returns the cookie path.
-    /// If the path is not set, this will return `None`.
+    /// If the path is not insert, this will return `None`.
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").path(Some("/path")).build();
+    /// let cookie = ResponseCookie::builder("name", "value")
+    ///     .path(Some("/path"))
+    ///     .build();
     ///
     /// assert_eq!(cookie.path(), Some("/path"));
     /// ```
@@ -157,13 +160,14 @@ impl ResponseCookie {
     }
 
     /// Returns the cookie domain.
-    /// If the domain is not set, this will return `None`.
+    /// If the domain is not insert, this will return
+    /// `None`.
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value")
+    /// let cookie = ResponseCookie::builder("name", "value")
     ///     .domain(Some("example.com"))
     ///     .build();
     ///
@@ -174,15 +178,17 @@ impl ResponseCookie {
     }
 
     /// Returns the cookie max age.
-    /// If the max age is not set, this will return `None`.
-    /// The max age is the number of seconds until the
-    /// cookie expires.
+    /// If the max age is not insert, this will return
+    /// `None`. The max age is the number of seconds
+    /// until the cookie expires.
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").max_age(Some(3600)).build();
+    /// let cookie = ResponseCookie::builder("name", "value")
+    ///     .max_age(Some(3600))
+    ///     .build();
     ///
     /// assert_eq!(cookie.max_age(), Some(&3600));
     /// ```
@@ -198,9 +204,11 @@ impl ResponseCookie {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").secure(true).build();
+    /// let cookie = ResponseCookie::builder("name", "value")
+    ///     .secure(true)
+    ///     .build();
     ///
     /// assert_eq!(cookie.secure(), true);
     /// ```
@@ -214,9 +222,11 @@ impl ResponseCookie {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").http_only(true).build();
+    /// let cookie = ResponseCookie::builder("name", "value")
+    ///     .http_only(true)
+    ///     .build();
     ///
     /// assert_eq!(cookie.http_only(), true);
     /// ```
@@ -229,9 +239,9 @@ impl ResponseCookie {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::SameSite;
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value")
+    /// let cookie = ResponseCookie::builder("name", "value")
     ///     .same_site(Some(SameSite::Strict))
     ///     .build();
     ///
@@ -277,6 +287,7 @@ impl ResponseCookieBuilder {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value").build();
     ///
@@ -300,6 +311,7 @@ impl ResponseCookieBuilder {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .name("new_name")
@@ -429,6 +441,7 @@ impl ResponseCookieBuilder {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .name("new_name")
@@ -450,6 +463,7 @@ impl ResponseCookieBuilder {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .value("new_value")
@@ -470,6 +484,7 @@ impl ResponseCookieBuilder {
     /// # Example
     /// ```no_run
     /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value").build();
     ///
@@ -578,8 +593,9 @@ impl Cookie for ResponseCookie {
     /// # Example
     /// ```no_run
     /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").build();
+    /// let cookie = ResponseCookie::builder("name", "value").build();
     ///
     /// assert_eq!(cookie.name(), "name");
     /// ```
@@ -592,8 +608,9 @@ impl Cookie for ResponseCookie {
     /// # Example
     /// ```no_run
     /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = Cookie::builder("name", "value").build();
+    /// let cookie = ResponseCookie::builder("name", "value").build();
     ///
     /// assert_eq!(cookie.value(), "value");
     /// ```
@@ -638,10 +655,10 @@ pub trait HasCookies: HasHeaders {
     }
 
     fn cookie(&self, name: &str) -> Option<Self::Item> {
-        match self.cookies() {
-            Ok(cookies) => cookies.into_iter().find(|cookie| cookie.name() == name),
-            Err(_) => None,
-        }
+        self.cookies()
+            .ok()?
+            .into_iter()
+            .find(|cookie| cookie.name() == name)
     }
 
     fn has_cookie(&self, name: &str) -> bool {

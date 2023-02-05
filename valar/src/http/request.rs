@@ -6,7 +6,6 @@ use http::Request as BaseRequest;
 use http::Result as HttpResult;
 use hyper::Body;
 use serde::Deserialize;
-#[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
 use crate::http::cookies::HasCookies;
@@ -447,7 +446,6 @@ impl Request {
     ///
     /// assert_eq!(user.name, "John");
     /// ```
-    #[cfg(feature = "json")]
     pub fn json<'a, T>(&'a self) -> JsonResult<T>
     where
         T: Deserialize<'a>,
@@ -466,6 +464,7 @@ impl HasHeaders for Request {
     /// ```no_run
     /// use std::collections::HashMap;
     ///
+    /// use valar::http::HasHeaders;
     /// use valar::http::Request;
     ///
     /// let request = Request::builder()

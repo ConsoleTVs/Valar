@@ -2,9 +2,7 @@ use http::Response as BaseResponse;
 use http::Result as HttpResult;
 use hyper::Body;
 use serde::Serialize;
-#[cfg(feature = "json")]
 use serde_json::Error as JsonError;
-#[cfg(feature = "json")]
 use serde_json::Result as JsonResult;
 
 use crate::http::cookies::HasCookies;
@@ -259,7 +257,6 @@ impl ResponseBuilder {
 
     /// Sets the apropiate body and headers for a JSON
     /// response.
-    #[cfg(feature = "json")]
     pub fn json<J>(mut self, json: &J) -> JsonResult<Self>
     where
         J: Serialize,
@@ -270,7 +267,6 @@ impl ResponseBuilder {
         Ok(self)
     }
 
-    #[cfg(feature = "json")]
     pub fn json_or<J>(mut self, json: &J, default: String) -> Self
     where
         J: Serialize,
@@ -281,7 +277,6 @@ impl ResponseBuilder {
         self
     }
 
-    #[cfg(feature = "json")]
     pub fn json_or_else<J, D>(mut self, json: &J, default: D) -> Self
     where
         J: Serialize,

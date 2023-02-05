@@ -5,6 +5,7 @@ pub mod headers;
 pub mod request;
 pub mod response;
 pub mod server;
+pub mod session;
 
 use std::future::Future;
 use std::pin::Pin;

@@ -25,11 +25,15 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: None,
+            headers: None,
+        }
     }
 
-    pub fn status(mut self, status: StatusCode) -> Self {
+    pub const fn status(mut self, status: StatusCode) -> Self {
         self.status = status;
 
         self
@@ -53,7 +57,6 @@ impl ErrorResponse {
         self
     }
 
-    #[cfg(feature = "json")]
     pub fn into_json_response(self) -> Response {
         let message = self
             .message
@@ -84,15 +87,5 @@ impl ErrorResponse {
             .headers(self.headers.unwrap_or_default())
             .body(message)
             .build()
-    }
-}
-
-impl Default for ErrorResponse {
-    fn default() -> Self {
-        Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: None,
-            headers: None,
-        }
     }
 }

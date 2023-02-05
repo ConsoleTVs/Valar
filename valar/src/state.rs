@@ -1,6 +1,7 @@
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
+#[derive(Default)]
 pub struct State<T>(Mutex<T>);
 
 impl<T> State<T> {
@@ -56,14 +57,14 @@ impl<T> State<T> {
     /// let mut runtime = Runtime::new().unwrap();
     ///
     /// runtime.block_on(async {
-    ///     state.set(1).await;
+    ///     state.insert(1).await;
     ///
     ///     let value = state.clone().await;
     ///
     ///     assert_eq!(value, 1);
     /// });
     /// ```
-    pub async fn set(&self, value: T) {
+    pub async fn insert(&self, value: T) {
         let mut current = self.0.lock().await;
 
         *current = value;
@@ -105,6 +106,35 @@ impl<T> State<T> {
         let mut current = self.0.lock().await;
 
         *current = callback(&current);
+
+        self
+    }
+
+    /// # Example
+    ///
+    /// ```no_run
+    /// use tokio::runtime::Runtime;
+    /// use valar::state::State;
+    ///
+    /// let state = State::new(0);
+    ///
+    /// let mut runtime = Runtime::new().unwrap();
+    ///
+    /// runtime.block_on(async {
+    ///     state.then(|mut value| *value = 10).await;
+    ///
+    ///     let value = state.clone().await;
+    ///
+    ///     assert_eq!(value, 10);
+    /// });
+    /// ```
+    pub async fn then<F>(&self, callback: F) -> &Self
+    where
+        F: FnOnce(MutexGuard<T>),
+    {
+        let current = self.0.lock().await;
+
+        callback(current);
 
         self
     }
@@ -152,12 +182,12 @@ impl<T: Clone> State<T> {
     /// let mut runtime = Runtime::new().unwrap();
     ///
     /// runtime.block_on(async {
-    ///     let value = state.map_clone(|value| value + 1).await;
+    ///     let value = state.clone_map(|value| value + 1).await;
     ///
     ///     assert_eq!(value, 1);
     /// });
     /// ```
-    pub async fn map_clone<F>(&self, callback: F) -> T
+    pub async fn clone_map<F>(&self, callback: F) -> T
     where
         F: FnOnce(&T) -> T,
         T: Clone,
