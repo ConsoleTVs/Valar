@@ -238,7 +238,7 @@ impl ResponseCookie {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::SameSite;
+    /// use valar::http::cookie::SameSite;
     /// use valar::http::ResponseCookie;
     ///
     /// let cookie = ResponseCookie::builder("name", "value")
@@ -286,7 +286,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value").build();
@@ -310,7 +310,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
@@ -332,7 +332,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .domain(Some("example.com"))
@@ -355,7 +355,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .max_age(Some(3600))
@@ -375,7 +375,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .secure(true)
@@ -395,7 +395,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .http_only(true)
@@ -418,8 +418,8 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
-    /// use valar::http::cookies::SameSite;
+    /// use valar::http::cookie::ResponseCookieBuilder;
+    /// use valar::http::cookie::SameSite;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
     ///     .same_site(Some(SameSite::Lax))
@@ -440,7 +440,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
@@ -462,7 +462,7 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value")
@@ -483,7 +483,7 @@ impl ResponseCookieBuilder {
     /// Builds the cookie.
     /// # Example
     /// ```no_run
-    /// use valar::http::cookies::ResponseCookieBuilder;
+    /// use valar::http::cookie::ResponseCookieBuilder;
     /// use valar::http::Cookie;
     ///
     /// let cookie = ResponseCookieBuilder::new("name", "value").build();
@@ -673,9 +673,9 @@ pub trait HasCookies: HasHeaders {
 mod tests {
     use std::str::FromStr;
 
-    use crate::http::cookies::Cookie;
-    use crate::http::cookies::ResponseCookie;
-    use crate::http::cookies::SameSite;
+    use crate::http::cookie::Cookie;
+    use crate::http::cookie::ResponseCookie;
+    use crate::http::cookie::SameSite;
 
     #[test]
     fn it_can_create_simple_cookies() {

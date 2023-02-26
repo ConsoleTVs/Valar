@@ -15,9 +15,9 @@ use crate::routing::Router;
 use crate::Application;
 use crate::Error;
 
-pub struct Matcher<App: Application>(Vec<(Regex, Route<App>)>);
+pub struct Matcher<App: Application + Send + Sync + 'static>(Vec<(Regex, Route<App>)>);
 
-impl<App: Application> Matcher<App> {
+impl<App: Application + Send + Sync + 'static> Matcher<App> {
     /// Creates a new route matcher.
     pub fn new<R>(routes: R) -> Result<Self, regex::Error>
     where
@@ -36,9 +36,7 @@ impl<App: Application> Matcher<App> {
     pub fn find(&self, method: &Method, uri: &Uri) -> Option<&Route<App>> {
         self.0
             .iter()
-            .find(|(regex, route)| {
-                regex.is_match(uri.path()) && route.method() == method
-            })
+            .find(|(regex, route)| regex.is_match(uri.path()) && route.method() == method)
             .map(|(_, route)| route)
     }
 
@@ -97,16 +95,11 @@ impl<App: Application> Matcher<App> {
             Err(error) => return Self::error_response(wants_json, error),
         };
 
-        let response = route.handle(application, request).await;
-
-        match response {
-            Ok(response) => response,
-            Err(error) => Self::error_response(wants_json, error),
-        }
+        route.handle(application, request).await
     }
 }
 
-impl<App: Application> TryFrom<Router<App>> for Matcher<App> {
+impl<App: Application + Send + Sync + 'static> TryFrom<Router<App>> for Matcher<App> {
     type Error = RegexError;
 
     fn try_from(router: Router<App>) -> Result<Matcher<App>, Self::Error> {
@@ -142,7 +135,7 @@ mod tests {
         type Application = App;
 
         fn router() -> Router<Self::Application> {
-            let mut router = Router::default();
+            let mut router = Router::new();
 
             router.get("/foo/:bar", handler);
 
@@ -156,7 +149,7 @@ mod tests {
 
     #[test]
     fn it_can_match_router_routes() {
-        let mut router = Router::default();
+        let mut router = Router::new();
 
         router.get("/", handler);
         router.get("/foo", handler);

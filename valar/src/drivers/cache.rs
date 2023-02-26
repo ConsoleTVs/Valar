@@ -7,6 +7,7 @@ pub use memory::MemoryCache;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+use tokio::time::Instant;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -71,22 +72,24 @@ pub trait Cache {
         }
     }
 
-    async fn insert<K, V>(&self, key: K, value: V) -> Result<&Self, Error>
+    async fn insert<K, V>(&self, key: K, value: V) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send;
 
-    async fn insert_expirable<K, V>(
-        &self,
-        key: K,
-        value: V,
-        expires_in: Duration,
-    ) -> Result<&Self, Error>
+    async fn insert_for<K, V, D>(&self, key: K, value: V, expires_in: D) -> Result<(), Error>
     where
         K: Into<String> + Send,
-        V: Serialize + Send;
+        V: Serialize + Send,
+        D: Into<Duration> + Send;
 
-    async fn map<K, V, SV, F>(&self, key: K, callback: F) -> Result<&Self, Error>
+    async fn insert_until<K, V, I>(&self, key: K, value: V, expires_at: I) -> Result<(), Error>
+    where
+        K: Into<String> + Send,
+        V: Serialize + Send,
+        I: Into<Instant> + Send;
+
+    async fn map<K, V, SV, F>(&self, key: K, callback: F) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
@@ -99,15 +102,10 @@ pub trait Cache {
 
         self.insert(key, new).await?;
 
-        Ok(self)
+        Ok(())
     }
 
-    async fn map_or<K, V, SV, F>(
-        &self,
-        default: SV,
-        key: K,
-        callback: F,
-    ) -> Result<&Self, Error>
+    async fn map_or<K, V, SV, F>(&self, default: SV, key: K, callback: F) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
@@ -120,7 +118,7 @@ pub trait Cache {
 
         self.insert(key, new).await?;
 
-        Ok(self)
+        Ok(())
     }
 
     async fn map_or_else<K, V, SV, SF, F>(
@@ -128,7 +126,7 @@ pub trait Cache {
         default: SF,
         key: K,
         callback: F,
-    ) -> Result<&Self, Error>
+    ) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
@@ -142,14 +140,10 @@ pub trait Cache {
 
         self.insert(key, new).await?;
 
-        Ok(self)
+        Ok(())
     }
 
-    async fn map_or_default<K, V, SV, F>(
-        &self,
-        key: K,
-        callback: F,
-    ) -> Result<&Self, Error>
+    async fn map_or_default<K, V, SV, F>(&self, key: K, callback: F) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
@@ -163,7 +157,7 @@ pub trait Cache {
 
         self.insert(key, new).await?;
 
-        Ok(self)
+        Ok(())
     }
 
     async fn delete(&self, key: &str);

@@ -1,7 +1,8 @@
 pub mod client;
-pub mod cookies;
+pub mod cookie;
 pub mod error;
 pub mod headers;
+pub mod middleware;
 pub mod request;
 pub mod response;
 pub mod server;
@@ -13,10 +14,10 @@ use std::result::Result as BaseResult;
 use std::sync::Arc;
 
 pub use client::Client;
-pub use cookies::Cookie;
-pub use cookies::HasCookies;
-pub use cookies::RequestCookie;
-pub use cookies::ResponseCookie;
+pub use cookie::Cookie;
+pub use cookie::HasCookies;
+pub use cookie::RequestCookie;
+pub use cookie::ResponseCookie;
 pub use error::ErrorResponse;
 pub use headers::HasHeaders;
 pub use headers::Headers;
@@ -37,11 +38,8 @@ pub type Result = BaseResult<Response, Error>;
 
 /// A route handler is an async function that takes
 /// a request and returns a response.
-pub type Handler<App> = Box<
-    dyn Fn(
-            Arc<App>,
-            Request,
-        ) -> Pin<Box<dyn Future<Output = Result> + Send + 'static>>
+pub type Handler<App> = Arc<
+    dyn Fn(Arc<App>, Request) -> Pin<Box<dyn Future<Output = Result> + Send + 'static>>
         + Send
         + Sync
         + 'static,

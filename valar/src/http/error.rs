@@ -58,9 +58,12 @@ impl ErrorResponse {
     }
 
     pub fn into_json_response(self) -> Response {
-        let message = self
-            .message
-            .unwrap_or_else(|| "Internal Server Error".to_string());
+        let message = self.message.unwrap_or_else(|| {
+            self.status
+                .canonical_reason()
+                .unwrap_or("Whops, there was an error.")
+                .to_string()
+        });
 
         let mut headers = Headers::from([("Content-Type", "application/json")]);
 
@@ -78,9 +81,12 @@ impl ErrorResponse {
     }
 
     pub fn into_response(self) -> Response {
-        let message = self
-            .message
-            .unwrap_or_else(|| "Internal Server Error".to_string());
+        let message = self.message.unwrap_or_else(|| {
+            self.status
+                .canonical_reason()
+                .unwrap_or("Whops, there was an error.")
+                .to_string()
+        });
 
         Response::builder()
             .status(self.status)

@@ -88,7 +88,7 @@ impl Cache for MemoryCache {
         serde_json::from_str(&value).map_err(Error::Deserialize)
     }
 
-    async fn insert<K, V>(&self, key: K, value: V) -> Result<&Self, Error>
+    async fn insert<K, V>(&self, key: K, value: V) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
@@ -98,26 +98,43 @@ impl Cache for MemoryCache {
 
         state.insert(key.into(), value);
 
-        Ok(self)
+        Ok(())
     }
 
-    async fn insert_expirable<K, V>(
+    async fn insert_for<K, V, D>(
         &self,
         key: K,
         value: V,
-        expires_in: Duration,
-    ) -> Result<&Self, Error>
+        expires_in: D,
+    ) -> Result<(), Error>
     where
         K: Into<String> + Send,
         V: Serialize + Send,
+        D: Into<Duration> + Send,
+    {
+        let expires_at = Instant::now() + expires_in.into();
+
+        self.insert_until(key, value, expires_at).await
+    }
+
+    async fn insert_until<K, V, I>(
+        &self,
+        key: K,
+        value: V,
+        expires_at: I,
+    ) -> Result<(), Error>
+    where
+        K: Into<String> + Send,
+        V: Serialize + Send,
+        I: Into<Instant> + Send,
     {
         let key: String = key.into();
         self.insert(key.clone(), value).await?;
 
         let mut expirations = self.expirations.get().await;
-        expirations.insert(key, Instant::now() + expires_in);
+        expirations.insert(key, expires_at.into());
 
-        Ok(self)
+        Ok(())
     }
 
     async fn delete(&self, key: &str) {

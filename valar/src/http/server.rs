@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use colored::Colorize;
 use hyper::service::make_service_fn;
 use hyper::service::service_fn;
 use hyper::Server as BaseServer;
@@ -20,33 +21,56 @@ impl Server {
     }
 
     pub async fn start<App: Application + Send + Sync + 'static>(&self, app: App) {
-        println!("VALAR");
-        println!("Developer Centric Web Framework");
+        println!("{} • Supercharged Async Web Framework", "Valar".bold());
+        println!("{}", "Lambda Studio • https://λ.studio".italic().dimmed());
         println!();
 
         let app = Arc::new(app);
-        let router = App::router();
-        let matcher = Arc::new(router.into_matcher().unwrap());
+        let router = Arc::new(App::router().compile().unwrap());
 
         let service = make_service_fn(move |conn| {
             debug!("Incoming connection: {:?}", conn);
             let app = app.clone();
-            let matcher = matcher.clone();
+            let router = router.clone();
 
             async move {
                 Ok::<_, Infallible>(service_fn(move |request| {
                     info!("{} {}", request.method(), request.uri());
                     let app = app.clone();
-                    let matcher = matcher.clone();
+                    let router = router.clone();
 
-                    async move { matcher.handle(app, request).await.into_base_response() }
+                    async move { router.handle(app, request).await.into_base_response() }
                 }))
             }
         });
 
         let server = BaseServer::bind(&self.address).serve(service);
 
-        println!("Server running at: http://{}", self.address);
+        println!(
+            "Server running at: {}{}",
+            "http://".bold(),
+            self.address.to_string().bold()
+        );
+        println!();
+
+        println!(
+            "{}",
+            "Valar is still under development. Use at your own risk."
+                .yellow()
+                .italic()
+        );
+        println!(
+            "{}",
+            "Please report any bugs or feature requests at:"
+                .yellow()
+                .italic()
+        );
+        println!(
+            "{}",
+            "https://github.com/ConsoleTVs/Valar/issues."
+                .yellow()
+                .italic()
+        );
         println!();
 
         if let Err(e) = server.await {

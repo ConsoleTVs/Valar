@@ -1,14 +1,16 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
 
+use colored::Colorize;
 use http::Request as BaseRequest;
 use http::Result as HttpResult;
 use hyper::Body;
 use serde::Deserialize;
 use serde_json::Result as JsonResult;
 
-use crate::http::cookies::HasCookies;
+use crate::http::cookie::HasCookies;
 use crate::http::headers::HasHeaders;
 use crate::http::ErrorResponse;
 use crate::http::FakeResponse;
@@ -18,6 +20,7 @@ use crate::http::RequestCookie;
 use crate::http::StatusCode;
 use crate::http::Uri;
 use crate::http::Version;
+use crate::routing::Route;
 use crate::Application;
 use crate::Error;
 use crate::FakeApplication;
@@ -51,6 +54,9 @@ pub struct Request {
 
     /// The URI query parameters.
     query_parameters: HashMap<String, String>,
+
+    /// Stores additional request metadata.
+    metadata: HashMap<String, String>,
 }
 
 impl Request {
@@ -142,6 +148,14 @@ impl Request {
     /// ```
     pub fn body(&self) -> &str {
         &self.body
+    }
+
+    pub fn metadata(&self) -> &HashMap<String, String> {
+        &self.metadata
+    }
+
+    pub fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.metadata
     }
 
     /// Returns true if the request is considered to have a
@@ -312,12 +326,13 @@ impl Request {
                 .trim_start_matches('/')
                 .trim_start_matches('?')
                 .split('&')
-                .map(|pair| {
+                .filter_map(|pair| {
                     let mut pair = pair.split('=');
-                    let key = pair.next().unwrap_or_default().to_string();
-                    let value = pair.next().unwrap_or_default().to_string();
 
-                    (key, value)
+                    let key = pair.next()?;
+                    let value = pair.next()?;
+
+                    Some((key.to_string(), value.to_string()))
                 })
                 .collect(),
             None => HashMap::default(),
@@ -452,6 +467,22 @@ impl Request {
     {
         serde_json::from_str(&self.body)
     }
+
+    pub fn parematrized<App: Application>(mut self, route: &Route<App>) -> Self {
+        self.route_parameters = route.parameters(self.uri());
+
+        self
+    }
+}
+
+impl Display for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let method = self.method().as_str();
+        let path = self.uri().path().bold();
+        let query = self.uri().query().unwrap_or_default();
+
+        write!(f, "⮕  {method} {path} {query}")
+    }
 }
 
 impl HasHeaders for Request {
@@ -490,6 +521,7 @@ pub struct RequestBuilder {
     headers: Headers,
     body: String,
     route_parameters: HashMap<String, String>,
+    metadata: HashMap<String, String>,
 }
 
 impl RequestBuilder {
@@ -518,10 +550,22 @@ impl RequestBuilder {
         self
     }
 
-    pub fn uri_str(
-        mut self,
-        uri: &str,
-    ) -> Result<Self, <http::Uri as FromStr>::Err> {
+    pub fn metadata<M>(mut self, metadata: M) -> Self
+    where
+        M: Into<HashMap<String, String>>,
+    {
+        self.metadata = metadata.into();
+
+        self
+    }
+
+    pub fn meta(mut self, key: &str, value: &str) -> Self {
+        self.metadata.insert(key.to_string(), value.to_string());
+
+        self
+    }
+
+    pub fn uri_str(mut self, uri: &str) -> Result<Self, <http::Uri as FromStr>::Err> {
         self.uri = Uri::from_str(uri)?;
 
         Ok(self)
@@ -586,11 +630,12 @@ impl RequestBuilder {
             version: self.version,
             headers: self.headers,
             body: self.body,
+            metadata: self.metadata,
         }
     }
 }
 
-pub struct FakeRequest<'a, App: Application> {
+pub struct FakeRequest<'a, App: Application + Send + Sync + 'static> {
     app: &'a FakeApplication<App>,
     method: Method,
     uri: Uri,
@@ -599,7 +644,7 @@ pub struct FakeRequest<'a, App: Application> {
     body: String,
 }
 
-impl<'a, App: Application> FakeRequest<'a, App> {
+impl<'a, App: Application + Send + Sync + 'static> FakeRequest<'a, App> {
     pub fn new(app: &'a FakeApplication<App>) -> FakeRequest<'a, App> {
         FakeRequest {
             app,
@@ -679,10 +724,10 @@ impl<'a, App: Application> FakeRequest<'a, App> {
     }
 
     pub async fn send(self) -> FakeResponse {
-        let matcher = self.app.matcher();
+        let router = self.app.router();
         let app = self.app.app_arc();
         let request = self.into_base_request().unwrap_or_default();
-        let response = matcher.handle(app, request).await;
+        let response = router.handle(app, request).await;
 
         FakeResponse::new(response)
     }

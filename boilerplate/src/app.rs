@@ -16,13 +16,12 @@ pub struct App {
 impl Application for App {
     async fn create() -> Result<Self, Error> {
         let app = Self {
-            database: Database::connect("host=localhost user=erik dbname=valar")
-                .await?,
+            database: Database::connect("host=localhost user=erik dbname=valar").await?,
             cache: MemoryCache::with_purge_interval(Duration::from_secs(1)),
         };
 
         app.cache
-            .insert_expirable("foo", "bar", Duration::from_secs(3))
+            .insert_for("foo", "bar", Duration::from_secs(3))
             .await?;
 
         Ok(app)

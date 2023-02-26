@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use regex::Error as RegexError;
 
 use crate::http::FakeRequest;
 use crate::http::Method;
+use crate::routing::router::Compiled;
 use crate::routing::router::Routable;
-use crate::routing::Matcher;
+use crate::routing::Router;
 use crate::Error;
 
 #[async_trait]
-pub trait Application: Routable<Application = Self> + Sized {
+pub trait Application: Routable<Application = Self> + Sized + Send + Sync + 'static {
     /// En entry point for your application.
     /// This is where you should create your application
     /// and return it. This is where you should also
@@ -47,6 +49,15 @@ pub trait Application: Routable<Application = Self> + Sized {
         Ok(fake)
     }
 
+    /// Transforms an application into a fake application.
+    ///
+    /// This is useful for testing your application
+    /// while allowing you to manually create the
+    /// application.
+    async fn into_fake(self) -> Result<FakeApplication<Self>, RegexError> {
+        FakeApplication::new(self)
+    }
+
     /// Returns a fake application and calls the given
     /// callback.
     ///
@@ -68,30 +79,30 @@ pub trait Application: Routable<Application = Self> + Sized {
 /// A fake application.
 /// Useful for testing your application
 /// without having to start a server.
-pub struct FakeApplication<App: Application> {
+pub struct FakeApplication<App: Application + Send + Sync + 'static> {
     app: Arc<App>,
-    matcher: Matcher<App>,
+    router: Router<App, Compiled>,
 }
 
-impl<App: Application> FakeApplication<App> {
+impl<App: Application + Send + Sync + 'static> FakeApplication<App> {
     /// Creates a new fake application.
     /// This will create a new application and
     /// a new router matcher.
     ///
     /// This is useful for testing your application
     /// without having to start a server.
-    pub fn new(app: App) -> Result<Self, Error> {
+    pub fn new(app: App) -> Result<Self, RegexError> {
         let app = Self {
             app: Arc::new(app),
-            matcher: App::router().into_matcher()?,
+            router: App::router().compile()?,
         };
 
         Ok(app)
     }
 
     /// Returns a reference to the router matcher.
-    pub fn matcher(&self) -> &Matcher<App> {
-        &self.matcher
+    pub fn router(&self) -> &Router<App, Compiled> {
+        &self.router
     }
 
     /// Returns a reference to the application.

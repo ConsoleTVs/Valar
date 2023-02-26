@@ -6,7 +6,6 @@ use valar::database::builder::Whereable;
 use valar::database::Database;
 use valar::database::Executor;
 use valar::database::Row;
-use valar::drivers::cache::Cache;
 use valar::http::Request;
 use valar::http::Response;
 use valar::http::Result;
@@ -33,10 +32,6 @@ impl TryFrom<Row> for User {
 }
 
 pub async fn index(app: Arc<App>, _request: Request) -> Result {
-    app.cache
-        .map_or_default("views", |views: u16| views + 1)
-        .await?;
-
     let rows: Vec<User> = Database::table("users")
         .select_all()
         .get(&app.database)

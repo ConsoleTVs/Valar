@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+use colored::Colorize;
 use http::Response as BaseResponse;
 use http::Result as HttpResult;
 use hyper::Body;
@@ -5,7 +8,7 @@ use serde::Serialize;
 use serde_json::Error as JsonError;
 use serde_json::Result as JsonResult;
 
-use crate::http::cookies::HasCookies;
+use crate::http::cookie::HasCookies;
 use crate::http::headers::HasHeaders;
 use crate::http::Headers;
 use crate::http::ResponseCookie;
@@ -95,6 +98,22 @@ impl Response {
             .status(self.status)
             .version(self.version)
             .body(Body::from(self.body))
+    }
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let code = self.status().as_u16();
+        let code_str = self.status().canonical_reason().unwrap_or("Unknown").bold();
+        let code = match code {
+            100..=199 => code.to_string().cyan(),
+            200..=299 => code.to_string().green(),
+            300..=399 => code.to_string().yellow(),
+            400..=599 => code.to_string().red(),
+            _ => code.to_string().white(),
+        };
+
+        write!(f, "⬅  {code} {code_str}")
     }
 }
 
