@@ -63,6 +63,7 @@ impl ErrorResponse {
                 .canonical_reason()
                 .unwrap_or("Whops, there was an error.")
                 .to_string()
+                .trim_matches('\t')
         });
 
         let mut headers = Headers::from([("Content-Type", "application/json")]);

@@ -1,100 +1,84 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::slice::Iter;
 use std::sync::Arc;
-use std::vec::IntoIter;
 
 use async_trait::async_trait;
 
+use crate::http::Handler as HttpHandler;
 use crate::http::Request;
-use crate::http::Response;
+use crate::http::Result as HttpResult;
 use crate::Application;
 
+pub type Handler = Arc<
+    dyn Fn(Request) -> Pin<Box<dyn Future<Output = HttpResult> + Send + 'static>>
+        + Send
+        + Sync
+        + 'static,
+>;
+
 #[async_trait]
-pub trait Middleware<App: Application + Send + Sync + 'static> {
-    async fn before(&self, app: Arc<App>, request: &mut Request) -> Option<Response>;
-    async fn after(&self, app: Arc<App>, response: &mut Response);
+pub trait Middleware {
+    async fn handle(&self, next: Handler, request: Request) -> HttpResult;
 }
 
-pub struct Middlewares<App: Application>(Vec<Arc<dyn Middleware<App> + Send + Sync>>);
+type SharableMiddleware = Arc<dyn Middleware + Send + Sync + 'static>;
 
-pub struct AfterMiddlewares<App: Application>(Vec<Arc<dyn Middleware<App> + Send + Sync>>);
+pub struct Middlewares(Vec<SharableMiddleware>);
 
-impl<App: Application> Extend<Arc<dyn Middleware<App> + Send + Sync>> for Middlewares<App> {
-    fn extend<T: IntoIterator<Item = Arc<dyn Middleware<App> + Send + Sync>>>(&mut self, iter: T) {
-        self.0.extend(iter);
+impl Default for Middlewares {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl<App: Application> Clone for Middlewares<App> {
+impl Clone for Middlewares {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<App: Application> Default for Middlewares<App> {
-    fn default() -> Self {
-        Self(Vec::new())
+impl IntoIterator for Middlewares {
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = SharableMiddleware;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
-impl<App: Application> AfterMiddlewares<App> {
-    pub fn new(middlewares: Vec<Arc<dyn Middleware<App> + Send + Sync>>) -> Self {
-        Self(middlewares)
-    }
+impl<'a> IntoIterator for &'a Middlewares {
+    type IntoIter = Iter<'a, SharableMiddleware>;
+    type Item = &'a SharableMiddleware;
 
-    pub async fn after(&self, app: Arc<App>, response: &mut Response) {
-        for middleware in self.0.iter().rev() {
-            middleware.after(app.clone(), response).await;
-        }
-    }
-}
-
-impl<App: Application> Middlewares<App> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn push(&mut self, middleware: Arc<dyn Middleware<App> + Send + Sync>) {
-        self.0.push(middleware);
-    }
-
-    pub fn pop(&mut self) -> Option<Arc<dyn Middleware<App> + Send + Sync>> {
-        self.0.pop()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, Arc<dyn Middleware<App> + Send + Sync>> {
+    fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
+}
 
-    pub async fn before(
-        &self,
-        app: Arc<App>,
-        request: &mut Request,
-    ) -> (Option<Response>, AfterMiddlewares<App>) {
-        let mut after: Vec<Arc<dyn Middleware<App> + Send + Sync>> = Vec::new();
-
-        for middleware in &self.0 {
-            let response = middleware.before(app.clone(), request).await;
-            after.push(middleware.clone());
-
-            if let Some(response) = response {
-                return (Some(response), AfterMiddlewares::new(after));
-            }
-        }
-
-        (None, AfterMiddlewares::new(after))
+impl Extend<SharableMiddleware> for Middlewares {
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = SharableMiddleware>,
+    {
+        self.0.extend(iter)
     }
 }
 
-impl<'a, App: Application> FromIterator<&'a Self> for Middlewares<App> {
-    fn from_iter<T: IntoIterator<Item = &'a Self>>(middlewares: T) -> Self {
+impl FromIterator<SharableMiddleware> for Middlewares {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = SharableMiddleware>,
+    {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl<'a> FromIterator<&'a Self> for Middlewares {
+    fn from_iter<I>(middlewares: I) -> Self
+    where
+        I: IntoIterator<Item = &'a Self>,
+    {
         let middlewares: Vec<_> = middlewares
             .into_iter()
             .flatten()
@@ -105,20 +89,36 @@ impl<'a, App: Application> FromIterator<&'a Self> for Middlewares<App> {
     }
 }
 
-impl<App: Application> IntoIterator for Middlewares<App> {
-    type IntoIter = IntoIter<Self::Item>;
-    type Item = Arc<dyn Middleware<App> + Send + Sync>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+impl Middlewares {
+    pub fn new() -> Self {
+        Self(Vec::new())
     }
-}
 
-impl<'a, App: Application> IntoIterator for &'a Middlewares<App> {
-    type IntoIter = Iter<'a, Arc<dyn Middleware<App> + Send + Sync>>;
-    type Item = &'a Arc<dyn Middleware<App> + Send + Sync>;
+    pub fn push(&mut self, middleware: SharableMiddleware) {
+        self.0.push(middleware);
+    }
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+    pub fn wrap<App: Application + Send + Sync + 'static>(
+        self,
+        handler: HttpHandler<App>,
+    ) -> HttpHandler<App> {
+        let iterator = self.0.into_iter();
+        Arc::new(move |app, request| {
+            let handler = handler.clone();
+            let handler: Handler = Arc::new(move |request| handler(app.clone(), request));
+
+            let handler = iterator
+                .clone()
+                .rev()
+                .fold(handler, move |next, middleware| {
+                    Arc::new(move |request| {
+                        let next = next.clone();
+                        let middleware = middleware.clone();
+                        Box::pin(async move { middleware.handle(next, request).await })
+                    })
+                });
+
+            Box::pin(async move { handler(request).await })
+        })
     }
 }

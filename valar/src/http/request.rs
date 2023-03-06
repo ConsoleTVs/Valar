@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -12,15 +13,16 @@ use serde_json::Result as JsonResult;
 
 use crate::http::cookie::HasCookies;
 use crate::http::headers::HasHeaders;
-use crate::http::ErrorResponse;
+// use crate::http::ErrorResponse;
 use crate::http::FakeResponse;
 use crate::http::Headers;
 use crate::http::Method;
 use crate::http::RequestCookie;
-use crate::http::StatusCode;
+use crate::http::Response;
 use crate::http::Uri;
 use crate::http::Version;
 use crate::routing::Route;
+use crate::utils::TruncatableToFit;
 use crate::Application;
 use crate::Error;
 use crate::FakeApplication;
@@ -32,6 +34,7 @@ use crate::FakeApplication;
 ///
 /// You should usually not build a request manually.
 /// Althought it is possible using the provided builder.
+#[derive(Debug)]
 pub struct Request {
     /// Stores the full request URI.
     /// The request's method
@@ -60,6 +63,13 @@ pub struct Request {
 }
 
 impl Request {
+    pub fn to_fixed_string(&self) -> String {
+        let method = self.method().as_str().truncate_to_fit(7);
+        let path = self.uri().path().truncate_to_fit(54).bold();
+
+        format!("{method:.<7} {path:.<54}")
+    }
+
     /// Creates a new request using the builder pattern.
     /// This is the preferred way to create a new request.
     ///
@@ -260,11 +270,11 @@ impl Request {
     /// assert_eq!(request.route_parameter("id").unwrap(), "1");
     /// assert!(request.route_parameter("name").is_err());
     /// ```
-    pub fn route_parameter(&self, name: &str) -> Result<&str, ErrorResponse> {
+    pub fn route_parameter(&self, name: &str) -> Result<&str, Response> {
         self.maybe_parameter(name).ok_or_else(|| {
-            ErrorResponse::new()
+            Response::internal_server_error()
                 .message(format!("Unknown route parameter: `{}`", name))
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .build()
         })
     }
 
@@ -399,11 +409,11 @@ impl Request {
     /// assert_eq!(request.query_parameter("name").unwrap(), "John");
     /// assert!(request.query_parameter("age").is_err());
     /// ```
-    pub fn query_parameter(&self, name: &str) -> Result<&str, ErrorResponse> {
+    pub fn query_parameter(&self, name: &str) -> Result<&str, Response> {
         self.maybe_query(name).ok_or_else(|| {
-            ErrorResponse::new()
+            Response::internal_server_error()
                 .message(format!("Unknown query parameter: `{}`", name))
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .build()
         })
     }
 
@@ -479,9 +489,12 @@ impl Display for Request {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let method = self.method().as_str();
         let path = self.uri().path().bold();
-        let query = self.uri().query().unwrap_or_default();
+        let query = self.uri().query();
 
-        write!(f, "⮕  {method} {path} {query}")
+        match query {
+            Some(query) => write!(f, "{method} {path} {query}"),
+            None => write!(f, "{method} {path}"),
+        }
     }
 }
 

@@ -4,6 +4,7 @@ pub mod drivers;
 pub mod http;
 pub mod routing;
 pub mod state;
+mod utils;
 
 pub use anyhow::Error;
 pub use application::Application;

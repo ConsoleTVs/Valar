@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Display;
 
 use colored::Colorize;
@@ -11,12 +12,15 @@ use serde_json::Result as JsonResult;
 use crate::http::cookie::HasCookies;
 use crate::http::headers::HasHeaders;
 use crate::http::Headers;
+use crate::http::Request;
 use crate::http::ResponseCookie;
 use crate::http::StatusCode;
 use crate::http::Version;
+use crate::utils::TruncatableToFit;
 
 /// A response is used to send a response back
 /// to the client.
+#[derive(Debug)]
 pub struct Response {
     /// The response's status
     status: StatusCode,
@@ -32,6 +36,28 @@ pub struct Response {
 }
 
 impl Response {
+    pub fn to_fixed_string(&self) -> String {
+        let code = self.status().as_u16();
+
+        let code_str = self
+            .status()
+            .canonical_reason()
+            .unwrap_or("Unknown")
+            .trim()
+            .truncate_to_fit(11)
+            .bold();
+
+        let code = match code {
+            100..=199 => code.to_string().truncate_to_fit(3).cyan(),
+            200..=299 => code.to_string().truncate_to_fit(3).green(),
+            300..=399 => code.to_string().truncate_to_fit(3).yellow(),
+            400..=599 => code.to_string().truncate_to_fit(3).red(),
+            _ => code.to_string().truncate_to_fit(3).white(),
+        };
+
+        format!("{code:.<3} {code_str:.<11}")
+    }
+
     /// Returns a response builder.
     pub fn builder() -> ResponseBuilder {
         ResponseBuilder::new()
@@ -58,6 +84,16 @@ impl Response {
     /// code.
     pub fn not_found() -> ResponseBuilder {
         Self::builder().not_found()
+    }
+
+    /// Returns a response builder with a not found status
+    /// code.
+    pub fn internal_server_error() -> ResponseBuilder {
+        Self::builder().internal_server_error()
+    }
+
+    pub fn payload_too_large() -> ResponseBuilder {
+        Self::builder().payload_too_large()
     }
 
     /// Returns the response status code.
@@ -101,10 +137,19 @@ impl Response {
     }
 }
 
+impl Error for Response {}
+
 impl Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code = self.status().as_u16();
-        let code_str = self.status().canonical_reason().unwrap_or("Unknown").bold();
+
+        let code_str = self
+            .status()
+            .canonical_reason()
+            .unwrap_or("Unknown")
+            .trim()
+            .bold();
+
         let code = match code {
             100..=199 => code.to_string().cyan(),
             200..=299 => code.to_string().green(),
@@ -113,7 +158,7 @@ impl Display for Response {
             _ => code.to_string().white(),
         };
 
-        write!(f, "⬅  {code} {code_str}")
+        write!(f, "{code} {code_str}")
     }
 }
 
@@ -128,6 +173,11 @@ impl HasCookies for Response {
     type Item = ResponseCookie;
 }
 
+pub enum ResponseMessage {
+    Text(String),
+    Canonical,
+}
+
 pub struct ResponseBuilder {
     /// The response's status
     status: StatusCode,
@@ -139,7 +189,9 @@ pub struct ResponseBuilder {
     headers: Headers,
 
     /// The body of the response.
-    body: String,
+    body: Option<String>,
+
+    message: Option<ResponseMessage>,
 }
 
 impl ResponseBuilder {
@@ -156,8 +208,9 @@ impl ResponseBuilder {
     }
 
     /// Sets a header to the response.
-    pub fn header<V>(mut self, header: &str, value: V) -> Self
+    pub fn header<H, V>(mut self, header: H, value: V) -> Self
     where
+        H: Into<String>,
         V: Into<String>,
     {
         self.headers.insert(header, value.into());
@@ -166,8 +219,9 @@ impl ResponseBuilder {
     }
 
     /// Appends a header to the response.
-    pub fn append_header<V>(mut self, header: &str, value: V) -> Self
+    pub fn append_header<H, V>(mut self, header: H, value: V) -> Self
     where
+        H: Into<String>,
         V: Into<String>,
     {
         self.headers.append(header, value.into());
@@ -202,7 +256,7 @@ impl ResponseBuilder {
     where
         B: Into<String>,
     {
-        self.body = body.into();
+        self.body = Some(body.into());
 
         self
     }
@@ -251,6 +305,28 @@ impl ResponseBuilder {
         self
     }
 
+    /// Sets the status code to INTERNAL SERVER ERROR.
+    pub fn payload_too_large(mut self) -> Self {
+        self.status = StatusCode::PAYLOAD_TOO_LARGE;
+
+        self
+    }
+
+    pub fn message<M>(mut self, message: M) -> Self
+    where
+        M: Into<String>,
+    {
+        self.message = Some(ResponseMessage::Text(message.into()));
+
+        self
+    }
+
+    pub fn with_canonical_message(mut self) -> Self {
+        self.message = Some(ResponseMessage::Canonical);
+
+        self
+    }
+
     /// Sets the apropiate body and headers for a HTML
     /// response.
     pub fn html<H>(mut self, html: H) -> Self
@@ -258,9 +334,8 @@ impl ResponseBuilder {
         H: Into<String>,
     {
         self.headers.insert("Content-Type", "text/html");
-        self.body = html.into();
 
-        self
+        self.body(html.into())
     }
 
     /// Sets the apropiate headers for a text response.
@@ -269,9 +344,8 @@ impl ResponseBuilder {
         T: Into<String>,
     {
         self.headers.insert("Content-Type", "text/plain");
-        self.body = text.into();
 
-        self
+        self.body(text.into())
     }
 
     /// Sets the apropiate body and headers for a JSON
@@ -281,7 +355,7 @@ impl ResponseBuilder {
         J: Serialize,
     {
         self.headers.insert("Content-Type", "application/json");
-        self.body = serde_json::to_string(json)?;
+        self = self.body(serde_json::to_string(json)?);
 
         Ok(self)
     }
@@ -291,9 +365,8 @@ impl ResponseBuilder {
         J: Serialize,
     {
         self.headers.insert("Content-Type", "application/json");
-        self.body = serde_json::to_string(json).unwrap_or(default);
 
-        self
+        self.body(serde_json::to_string(json).unwrap_or(default))
     }
 
     pub fn json_or_else<J, D>(mut self, json: &J, default: D) -> Self
@@ -302,24 +375,73 @@ impl ResponseBuilder {
         D: Fn(JsonError) -> String,
     {
         self.headers.insert("Content-Type", "application/json");
-        self.body = serde_json::to_string(json).unwrap_or_else(default);
 
-        self
+        self.body(serde_json::to_string(json).unwrap_or_else(default))
+    }
+
+    pub fn content_type<V>(self, value: V) -> Self
+    where
+        V: Into<String>,
+    {
+        self.header("Content-Type", value)
+    }
+
+    pub fn json_content_type(self) -> Self {
+        self.content_type("application/json")
+    }
+
+    pub fn match_content_type(self, request: &Request) -> Self {
+        match request.headers().first("Accept") {
+            Some(header) => self.content_type(header),
+            None => self,
+        }
     }
 
     /// Builds the HTTP response.
     pub fn build(self) -> Response {
+        let body = match (self.body, self.message) {
+            (Some(body), _) => body,
+            (None, None) => String::new(),
+            (None, Some(message)) => {
+                let message = match message {
+                    ResponseMessage::Text(message) => message,
+                    ResponseMessage::Canonical => self
+                        .status
+                        .canonical_reason()
+                        .unwrap_or("An unknown error occurred")
+                        .trim()
+                        .to_string(),
+                };
+
+                message
+
+                // TODO: Make this based on content type?
+
+                // match self.headers.contains("
+                // Content-Type", "application/json") {
+                //     true => format!(r#"{{ "message":
+                // "{message}" }}"#),
+                //     false => message,
+                // }
+            }
+        };
+
         Response {
             status: self.status,
             version: self.version,
             headers: self.headers,
-            body: self.body,
+            body,
         }
     }
 
     /// Produces a handler response from the builder.
-    pub fn produce(self) -> Result<Response, anyhow::Error> {
+    pub fn as_ok(self) -> Result<Response, anyhow::Error> {
         Ok(self.build())
+    }
+
+    /// Produces a handler response from the builder.
+    pub fn as_err(self) -> Result<Response, anyhow::Error> {
+        Err(self.build().into())
     }
 }
 
@@ -336,7 +458,8 @@ impl Default for ResponseBuilder {
             status: StatusCode::OK,
             version: Version::HTTP_11,
             headers: Headers::new(),
-            body: String::new(),
+            body: None,
+            message: None,
         }
     }
 }

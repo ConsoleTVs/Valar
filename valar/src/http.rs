@@ -1,6 +1,6 @@
 pub mod client;
 pub mod cookie;
-pub mod error;
+// pub mod error;
 pub mod headers;
 pub mod middleware;
 pub mod request;
@@ -18,7 +18,7 @@ pub use cookie::Cookie;
 pub use cookie::HasCookies;
 pub use cookie::RequestCookie;
 pub use cookie::ResponseCookie;
-pub use error::ErrorResponse;
+// pub use error::ErrorResponse;
 pub use headers::HasHeaders;
 pub use headers::Headers;
 pub use http::Method;

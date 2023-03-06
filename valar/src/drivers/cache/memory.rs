@@ -3,8 +3,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde::Deserialize;
-use serde::Serialize;
 use tokio::time::interval;
 use tokio::time::Instant;
 
@@ -61,10 +59,7 @@ impl MemoryCache {
 
 #[async_trait]
 impl Cache for MemoryCache {
-    async fn get<V>(&self, key: &str) -> Result<V, Error>
-    where
-        V: for<'de> Deserialize<'de> + Send,
-    {
+    async fn get(&self, key: &str) -> Result<String, Error> {
         let mut state = self.state.get().await;
 
         let value = state
@@ -82,70 +77,54 @@ impl Cache for MemoryCache {
             }
         }
 
-        drop(state);
-        drop(expirations);
-
-        serde_json::from_str(&value).map_err(Error::Deserialize)
+        Ok(value)
     }
 
-    async fn insert<K, V>(&self, key: K, value: V) -> Result<(), Error>
-    where
-        K: Into<String> + Send,
-        V: Serialize + Send,
-    {
-        let value = serde_json::to_string(&value).map_err(Error::Serialize)?;
+    async fn insert(&self, key: String, value: String) -> Result<(), Error> {
         let mut state = self.state.get().await;
-
-        state.insert(key.into(), value);
+        state.insert(key, value);
 
         Ok(())
     }
 
-    async fn insert_for<K, V, D>(
+    async fn insert_for(
         &self,
-        key: K,
-        value: V,
-        expires_in: D,
-    ) -> Result<(), Error>
-    where
-        K: Into<String> + Send,
-        V: Serialize + Send,
-        D: Into<Duration> + Send,
-    {
-        let expires_at = Instant::now() + expires_in.into();
+        key: String,
+        value: String,
+        expires_in: Duration,
+    ) -> Result<(), Error> {
+        let expires_at = Instant::now() + expires_in;
 
         self.insert_until(key, value, expires_at).await
     }
 
-    async fn insert_until<K, V, I>(
+    async fn insert_until(
         &self,
-        key: K,
-        value: V,
-        expires_at: I,
-    ) -> Result<(), Error>
-    where
-        K: Into<String> + Send,
-        V: Serialize + Send,
-        I: Into<Instant> + Send,
-    {
-        let key: String = key.into();
+        key: String,
+        value: String,
+        expires_at: Instant,
+    ) -> Result<(), Error> {
         self.insert(key.clone(), value).await?;
 
         let mut expirations = self.expirations.get().await;
-        expirations.insert(key, expires_at.into());
+        expirations.insert(key, expires_at);
 
         Ok(())
     }
 
-    async fn delete(&self, key: &str) {
+    async fn delete(&self, key: &str) -> Result<(), Error> {
         let mut state = self.state.get().await;
 
         state.remove(key);
+
+        Ok(())
     }
 
-    async fn clear(&self) {
+    async fn clear(&self) -> Result<(), Error> {
         let mut state = self.state.get().await;
 
         state.clear();
+
+        Ok(())
     }
 }

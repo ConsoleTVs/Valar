@@ -2,23 +2,21 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use http::Request as BaseRequest;
-use http::StatusCode;
 use http::Uri;
 use hyper::body::to_bytes;
 use hyper::body::HttpBody;
 use hyper::Body;
 use regex::Error as RegexError;
 
-use crate::http::ErrorResponse;
 use crate::http::Headers;
 use crate::http::Method;
 use crate::http::Request;
 use crate::http::Response;
+use crate::routing::middleware::Middleware;
 use crate::routing::middleware::Middlewares;
 use crate::routing::route::Builder;
 use crate::routing::route::Config;
 use crate::routing::route::Route;
-use crate::routing::Middleware;
 use crate::Application;
 use crate::Error as GeneralError;
 
@@ -35,7 +33,7 @@ enum Routes<App: Application> {
 /// against requests.
 pub struct Router<App: Application + Send + Sync + 'static, State = Pending> {
     /// Stores the current router configuration.
-    middlewares: Middlewares<App>,
+    middlewares: Middlewares,
 
     /// Stores the routes that the router will use to
     /// match requests.
@@ -45,27 +43,12 @@ pub struct Router<App: Application + Send + Sync + 'static, State = Pending> {
 }
 
 impl<App: Application, State> Router<App, State> {
-    pub(crate) fn error_response(wants_json: bool, error: GeneralError) -> Response {
-        let error = error.downcast::<ErrorResponse>().unwrap_or_else(|error| {
-            ErrorResponse::new()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
+    pub(crate) fn error_response(error: GeneralError) -> Response {
+        error.downcast::<Response>().unwrap_or_else(|error| {
+            Response::internal_server_error()
                 .message(error.to_string())
-        });
-
-        match wants_json {
-            true => error.into_json_response(),
-            false => error.into_response(),
-        }
-    }
-
-    pub(crate) fn wants_json(request: &BaseRequest<Body>) -> bool {
-        match request.headers().get("Accept") {
-            Some(accept) => accept
-                .to_str()
-                .map(|accept| accept.contains("application/json"))
-                .unwrap_or(false),
-            None => false,
-        }
+                .build()
+        })
     }
 }
 
@@ -80,7 +63,7 @@ impl<App: Application> Router<App, Pending> {
 
     pub fn middleware<M>(mut self, middleware: M) -> Self
     where
-        M: Middleware<App> + Send + Sync + 'static,
+        M: Middleware + Send + Sync + 'static,
     {
         self.middlewares.push(Arc::new(middleware));
 
@@ -144,11 +127,9 @@ impl<App: Application> Router<App, Compiled> {
     }
 
     pub(crate) async fn handle(&self, app: Arc<App>, request: BaseRequest<Body>) -> Response {
-        let wants_json = Self::wants_json(&request);
-
         let request = match Self::build_request(request).await {
             Ok(request) => request,
-            Err(error) => return Self::error_response(wants_json, error),
+            Err(error) => return Self::error_response(error),
         };
 
         let route = match self.find(request.method(), request.uri()) {
@@ -176,9 +157,9 @@ impl<App: Application> Router<App, Compiled> {
             .unwrap_or(MAX_ALLOWED_RESPONSE_SIZE + 1);
 
         if content_length > MAX_ALLOWED_RESPONSE_SIZE {
-            let error = ErrorResponse::new()
+            let error = Response::payload_too_large()
                 .message("Request body too large")
-                .status(StatusCode::PAYLOAD_TOO_LARGE);
+                .build();
 
             return Err(error.into());
         }

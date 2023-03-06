@@ -21,7 +21,7 @@ impl Application for App {
         };
 
         app.cache
-            .insert_for("foo", "bar", Duration::from_secs(3))
+            .insert_for("foo".to_string(), "bar".to_string(), Duration::from_secs(3))
             .await?;
 
         Ok(app)

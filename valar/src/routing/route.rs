@@ -3,18 +3,17 @@ use std::future::Future;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use http::StatusCode;
 use regex::Error as RegexError;
 use regex::Regex;
 
-use crate::http::ErrorResponse;
 use crate::http::Handler;
 use crate::http::Method;
 use crate::http::Request;
 use crate::http::Response;
+use crate::http::Result as HttpResult;
 use crate::http::Uri;
+use crate::routing::middleware::Middleware;
 use crate::routing::middleware::Middlewares;
-use crate::routing::Middleware;
 use crate::routing::Router;
 use crate::Application;
 
@@ -26,17 +25,17 @@ pub struct Data<App: Application> {
     methods: Vec<Method>,
     handler: Handler<App>,
     parameters: HashMap<String, String>,
-    middlewares: Middlewares<App>,
+    middlewares: Middlewares,
 }
 
 #[derive(Default)]
-pub struct Config<App: Application> {
-    middlewares: Middlewares<App>,
+pub struct Config {
+    middlewares: Middlewares,
     parameters: HashMap<String, String>,
 }
 
 pub struct Group<App: Application> {
-    config: Config<App>,
+    config: Config,
     routes: Vec<Builder<App>>,
 }
 
@@ -50,11 +49,10 @@ pub struct Route<App: Application> {
     path: String,
     method: Method,
     handler: Handler<App>,
-    middlewares: Middlewares<App>,
 }
 
-impl<App: Application> Config<App> {
-    pub fn from_middlewares(middlewares: Middlewares<App>) -> Self {
+impl Config {
+    pub fn from_middlewares(middlewares: Middlewares) -> Self {
         Self {
             middlewares,
             parameters: Default::default(),
@@ -62,7 +60,7 @@ impl<App: Application> Config<App> {
     }
 }
 
-impl<App: Application> Clone for Config<App> {
+impl Clone for Config {
     fn clone(&self) -> Self {
         Self {
             middlewares: self.middlewares.clone(),
@@ -71,7 +69,7 @@ impl<App: Application> Clone for Config<App> {
     }
 }
 
-impl<'a, App: Application> FromIterator<&'a Config<App>> for Config<App> {
+impl<'a> FromIterator<&'a Config> for Config {
     fn from_iter<T: IntoIterator<Item = &'a Self>>(iter: T) -> Self {
         let mut parameters = HashMap::new();
         let mut middlewares = Middlewares::new();
@@ -88,19 +86,19 @@ impl<'a, App: Application> FromIterator<&'a Config<App>> for Config<App> {
     }
 }
 
+async fn not_found_handler<App: Application>(_app: Arc<App>, request: Request) -> HttpResult {
+    Response::not_found()
+        .message(format!(
+            "No route found for {} {}",
+            request.method(),
+            request.uri()
+        ))
+        .as_ok()
+}
+
 impl<App: Application> Builder<App> {
     pub fn fallback() -> Self {
-        Builder::any(".*", move |_, request| {
-            let response = ErrorResponse::new()
-                .status(StatusCode::NOT_FOUND)
-                .message(format!(
-                    "No route found for {} {}",
-                    request.method(),
-                    request.uri()
-                ));
-
-            Box::pin(async move { crate::http::Result::Err(response.into()) })
-        })
+        Builder::any(".*", not_found_handler)
     }
 
     pub fn group<I>(routes: I) -> Self
@@ -122,7 +120,7 @@ impl<App: Application> Builder<App> {
     pub fn get<P, H, R>(path: P, handler: H) -> Self
     where
         P: Into<String>,
-        R: Future<Output = Result<Response, anyhow::Error>> + Send + 'static,
+        R: Future<Output = HttpResult> + Send + 'static,
         H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
     {
         let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
@@ -171,9 +169,9 @@ impl<App: Application> Builder<App> {
         Self::Data(data)
     }
 
-    pub fn middleware<M>(mut self, middleware: M) -> Self
+    pub fn middleware<M, R>(mut self, middleware: M) -> Self
     where
-        M: Middleware<App> + Send + Sync + 'static,
+        M: Middleware + Send + Sync + 'static,
     {
         let middlewares = match &mut self {
             Self::Data(data) => &mut data.middlewares,
@@ -200,7 +198,7 @@ impl<App: Application> Builder<App> {
         self
     }
 
-    pub fn compile(self, previous: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
+    pub fn compile(self, previous: Config) -> Result<Vec<Route<App>>, RegexError> {
         match self {
             Builder::Data(data) => data.compile(previous),
             Builder::Group(group) => group.compile(previous),
@@ -209,7 +207,7 @@ impl<App: Application> Builder<App> {
 }
 
 impl<App: Application> Group<App> {
-    pub fn compile(self, config: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
+    pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
 
         for route in self.routes {
@@ -253,18 +251,20 @@ impl<App: Application> Data<App> {
         Regex::new(&self.to_regex_string())
     }
 
-    pub fn compile(self, config: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
+    pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
 
         let regex = self.to_regex()?;
+
+        let middlewares = Middlewares::from_iter([&config.middlewares, &self.middlewares]);
+        let handler = middlewares.wrap(self.handler.clone());
 
         for method in self.methods {
             let route = Route {
                 regex: regex.clone(),
                 path: self.path.clone(),
                 method,
-                handler: self.handler.clone(),
-                middlewares: Middlewares::from_iter([&config.middlewares, &self.middlewares]),
+                handler: handler.clone(),
             };
 
             routes.push(route);
@@ -283,10 +283,6 @@ impl<App: Application> Route<App> {
         &self.path
     }
 
-    pub fn middlewares(&self) -> &Middlewares<App> {
-        &self.middlewares
-    }
-
     pub fn regex(&self) -> &Regex {
         &self.regex
     }
@@ -296,27 +292,11 @@ impl<App: Application> Route<App> {
     }
 
     /// Handles the route with the given app and request.
-    pub async fn handle(&self, app: Arc<App>, mut request: Request) -> Response {
-        let wants_json = request.wants_json();
-        let (response, middlewares) = self.middlewares.before(app.clone(), &mut request).await;
-
-        if let Some(mut response) = response {
-            // Some middleware bailed out and
-            // returned a response. Therefore we
-            // don't need to call the handler.
-            middlewares.after(app, &mut response).await;
-
-            return response;
-        }
-
-        let mut response = match (self.handler)(app.clone(), request).await {
+    pub async fn handle(&self, app: Arc<App>, request: Request) -> Response {
+        match (self.handler)(app, request).await {
             Ok(response) => response,
-            Err(error) => Router::<App>::error_response(wants_json, error),
-        };
-
-        middlewares.after(app, &mut response).await;
-
-        response
+            Err(error) => Router::<App>::error_response(error),
+        }
     }
 
     /// Get the parameters of the route given a path.

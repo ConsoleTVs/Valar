@@ -1,12 +1,10 @@
+use std::marker::PhantomData;
 use std::str::FromStr;
+use std::time::Duration;
 
-use serde::Deserialize;
-use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::drivers::cache;
-use crate::drivers::Cache;
 use crate::http::Cookie;
 use crate::http::HasCookies;
 use crate::http::Request;
@@ -20,51 +18,36 @@ pub enum Error {
     UuidParse(#[from] uuid::Error),
 }
 
-pub struct Session<'a, C: Cache + Sync> {
-    cache: &'a C,
-    uuid: Uuid,
+pub struct Session(Uuid);
+
+pub struct Insert {
+    key: String,
+    value: String,
+    expires_at: Option<Duration>,
 }
 
-impl<'a, C: Cache + Sync> Session<'a, C> {
-    pub fn new(cache: &'a C, uuid: Uuid) -> Self {
-        Self { cache, uuid }
+impl Session {}
+
+impl From<Uuid> for Session {
+    fn from(session: Uuid) -> Self {
+        Self(session)
     }
+}
 
-    fn key_of(&self, key: &str) -> String {
-        format!("session:{}:{}", self.uuid, key)
-    }
+impl TryFrom<&Request> for Session {
+    type Error = Error;
 
-    pub async fn get<V>(&self, key: &str) -> Result<V, cache::Error>
-    where
-        V: for<'de> Deserialize<'de> + Send,
-    {
-        self.cache.get(&self.key_of(key)).await
-    }
+    fn try_from(request: &Request) -> Result<Self, Self::Error> {
+        let cookie = request.cookie("session_uuid").ok_or(Error::NoSessionUuid)?;
+        let uuid = Uuid::from_str(cookie.value())?;
+        let session = Session::from(uuid);
 
-    pub async fn has(&self, key: &str) -> bool {
-        self.cache.has(&self.key_of(key)).await
-    }
-
-    pub async fn insert<K, V>(&self, key: K, value: V) -> Result<(), cache::Error>
-    where
-        K: Into<String> + Send,
-        V: Serialize + Send,
-    {
-        self.cache.insert(&self.key_of(&key.into()), value).await?;
-
-        Ok(())
+        Ok(session)
     }
 }
 
 impl Request {
-    pub fn session<'a, C>(&self, cache: &'a C) -> Result<Session<'a, C>, Error>
-    where
-        C: Cache + Sync,
-    {
-        let cookie = self.cookie("session_uuid").ok_or(Error::NoSessionUuid)?;
-        let uuid = Uuid::from_str(cookie.value())?;
-        let session = Session::new(cache, uuid);
-
-        Ok(session)
+    pub fn session(&self) -> Result<Session, Error> {
+        Session::try_from(self)
     }
 }

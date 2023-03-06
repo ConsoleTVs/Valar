@@ -15,12 +15,6 @@ impl Routable for App {
             Route::get("/user/:id", dashboard::show).where_parameter("id", "[0-9]+"),
         ]);
 
-        // let web = Route::group([
-        //     Route::get("/", dashboard::index),
-        //     Route::get("/other", dashboard::index),
-        //     Route::get("/another", dashboard::index),
-        // ]);
-
         Router::from_iter([api]).middleware(Logger)
     }
 }
