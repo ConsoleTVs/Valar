@@ -9,6 +9,8 @@ use hyper::Server as BaseServer;
 use log::debug;
 use log::info;
 
+use crate::routing::router::Compiled;
+use crate::routing::Router;
 use crate::Application;
 
 pub struct Server {
@@ -20,13 +22,14 @@ impl Server {
         ServerBuilder::new()
     }
 
-    pub async fn start<App: Application + Send + Sync + 'static>(&self, app: App) {
+    pub async fn start<App: Application + Send + Sync + 'static>(
+        &self,
+        app: Arc<App>,
+        router: Arc<Router<App, Compiled>>,
+    ) {
         println!("{} • Supercharged Async Web Framework", "Valar".bold());
         println!("{}", "Lambda Studio • https://λ.studio".italic().dimmed());
         println!();
-
-        let app = Arc::new(app);
-        let router = Arc::new(App::router().compile().unwrap());
 
         let service = make_service_fn(move |conn| {
             debug!("Incoming connection: {:?}", conn);
@@ -39,7 +42,7 @@ impl Server {
                     let app = app.clone();
                     let router = router.clone();
 
-                    async move { router.handle(app, request).await.into_base_response() }
+                    async move { router.handle_base(app, request).await.into_base_response() }
                 }))
             }
         });

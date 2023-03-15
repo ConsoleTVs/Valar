@@ -79,11 +79,7 @@ impl<'a> FromIterator<&'a Self> for Middlewares {
     where
         I: IntoIterator<Item = &'a Self>,
     {
-        let middlewares: Vec<_> = middlewares
-            .into_iter()
-            .flatten()
-            .map(|middleware| middleware.clone())
-            .collect();
+        let middlewares: Vec<_> = middlewares.into_iter().flatten().cloned().collect();
 
         Self(middlewares)
     }

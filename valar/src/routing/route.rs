@@ -14,7 +14,6 @@ use crate::http::Result as HttpResult;
 use crate::http::Uri;
 use crate::routing::middleware::Middleware;
 use crate::routing::middleware::Middlewares;
-use crate::routing::Router;
 use crate::Application;
 
 /// Routes are used to match requests to handlers. They
@@ -96,7 +95,7 @@ async fn not_found_handler<App: Application>(_app: Arc<App>, request: Request) -
         .as_ok()
 }
 
-impl<App: Application> Builder<App> {
+impl<App: Application + Send + Sync + 'static> Builder<App> {
     pub fn fallback() -> Self {
         Builder::any(".*", not_found_handler)
     }
@@ -141,7 +140,7 @@ impl<App: Application> Builder<App> {
     pub fn any<P, H, R>(path: P, handler: H) -> Self
     where
         P: Into<String>,
-        R: Future<Output = Result<Response, anyhow::Error>> + Send + 'static,
+        R: Future<Output = HttpResult> + Send + 'static,
         H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
     {
         let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
@@ -206,7 +205,7 @@ impl<App: Application> Builder<App> {
     }
 }
 
-impl<App: Application> Group<App> {
+impl<App: Application + Send + Sync + 'static> Group<App> {
     pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
 
@@ -221,7 +220,7 @@ impl<App: Application> Group<App> {
     }
 }
 
-impl<App: Application> Data<App> {
+impl<App: Application + Send + Sync + 'static> Data<App> {
     /// Returns the regex string literal for the given
     /// route.
     fn to_regex_string(&self) -> String {
@@ -295,7 +294,7 @@ impl<App: Application> Route<App> {
     pub async fn handle(&self, app: Arc<App>, request: Request) -> Response {
         match (self.handler)(app, request).await {
             Ok(response) => response,
-            Err(error) => Router::<App>::error_response(error),
+            Err(response) => response,
         }
     }
 

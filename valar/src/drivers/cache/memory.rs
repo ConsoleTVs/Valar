@@ -65,7 +65,7 @@ impl Cache for MemoryCache {
         let value = state
             .get(key)
             .cloned()
-            .ok_or(Error::NotFound(key.to_string()))?;
+            .ok_or_else(|| Error::NotFound(key.to_string()))?;
 
         let mut expirations = self.expirations.get().await;
 

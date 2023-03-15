@@ -17,16 +17,7 @@ impl TruncatableToFit for String {
 
 impl TruncatableToFit for &str {
     fn truncate_to_fit(self, width: usize) -> String {
-        let mut result = self.to_string();
-
-        if self.len() <= width {
-            return result;
-        }
-
-        result.truncate(width - 3);
-        result.push_str("...");
-
-        result
+        self.to_string().truncate_to_fit(width)
     }
 }
 

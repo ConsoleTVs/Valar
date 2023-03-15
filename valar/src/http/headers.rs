@@ -11,22 +11,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ConversionError {
-    #[error("{}", .0)]
-    HeaderFailure(InvalidHeaderName),
-    #[error("{}", .0)]
-    ValueFailure(InvalidHeaderValue),
-}
+    #[error(transparent)]
+    HeaderFailure(#[from] InvalidHeaderName),
 
-impl From<InvalidHeaderName> for ConversionError {
-    fn from(error: InvalidHeaderName) -> Self {
-        ConversionError::HeaderFailure(error)
-    }
-}
-
-impl From<InvalidHeaderValue> for ConversionError {
-    fn from(error: InvalidHeaderValue) -> Self {
-        ConversionError::ValueFailure(error)
-    }
+    #[error(transparent)]
+    ValueFailure(#[from] InvalidHeaderValue),
 }
 
 #[derive(Default, Debug)]
@@ -65,6 +54,10 @@ impl Headers {
     /// ```
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// Returns the number of values
@@ -427,6 +420,7 @@ impl TryFrom<Headers> for HeaderMap {
         for (header, value) in from {
             let header = HeaderName::from_str(&header)?;
             let value = HeaderValue::from_str(&value)?;
+
             headers.append(header.clone(), value);
         }
 
@@ -436,4 +430,5 @@ impl TryFrom<Headers> for HeaderMap {
 
 pub trait HasHeaders {
     fn headers(&self) -> &Headers;
+    fn headers_mut(&mut self) -> &mut Headers;
 }

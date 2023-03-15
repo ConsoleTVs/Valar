@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use colored::Colorize;
 
 use crate::http::Request;
-use crate::http::Response;
 use crate::http::Result as HttpResult;
 use crate::routing::middleware::Handler;
 use crate::routing::middleware::Middleware;
@@ -22,10 +21,7 @@ impl Middleware for Logger {
 
         match &response {
             Ok(response) => print(request_str, response.to_fixed_string()),
-            Err(error) => match error.downcast_ref::<Response>() {
-                Some(response) => print(request_str, response.to_fixed_string()),
-                None => print(request_str, format!("{}: {}", "Error".red(), error)),
-            },
+            Err(response) => print(request_str, response.to_fixed_string()),
         };
 
         Ok(response?)

@@ -3,7 +3,7 @@ use std::fmt::Display;
 
 use colored::Colorize;
 use http::Response as BaseResponse;
-use http::Result as HttpResult;
+use http::Result as BaseHttpResult;
 use hyper::Body;
 use serde::Serialize;
 use serde_json::Error as JsonError;
@@ -14,6 +14,7 @@ use crate::http::headers::HasHeaders;
 use crate::http::Headers;
 use crate::http::Request;
 use crate::http::ResponseCookie;
+use crate::http::Result as HttpResult;
 use crate::http::StatusCode;
 use crate::http::Version;
 use crate::utils::TruncatableToFit;
@@ -122,8 +123,68 @@ impl Response {
         self.headers().contains("Content-Type", "application/json")
     }
 
+    pub fn assert_status(&self, status: &StatusCode) -> &Self {
+        assert_eq!(*self.status(), *status);
+
+        self
+    }
+
+    pub fn assert_ok(&self) -> &Self {
+        assert_eq!(*self.status(), StatusCode::OK);
+
+        self
+    }
+
+    pub fn assert_created(&self) -> &Self {
+        assert_eq!(*self.status(), StatusCode::CREATED);
+
+        self
+    }
+
+    pub fn assert_no_content(&self) -> &Self {
+        assert_eq!(*self.status(), StatusCode::NO_CONTENT);
+
+        self
+    }
+
+    pub fn assert_not_found(&self) -> &Self {
+        assert_eq!(*self.status(), StatusCode::NOT_FOUND);
+
+        self
+    }
+
+    pub fn assert_version(&self, version: &Version) -> &Self {
+        assert_eq!(*self.version(), *version);
+
+        self
+    }
+
+    pub fn assert_has_header(&self, key: &str) -> &Self {
+        assert!(self.has_header(key));
+
+        self
+    }
+
+    pub fn assert_header_is(&self, key: &str, value: &str) -> &Self {
+        assert!(self.headers().is(key, value));
+
+        self
+    }
+
+    pub fn assert_header_contains(&self, key: &str, value: &str) -> &Self {
+        assert!(self.headers().contains(key, value));
+
+        self
+    }
+
+    pub fn assert_is_json(&self) -> &Self {
+        assert!(self.is_json());
+
+        self
+    }
+
     /// Transforms the response to a hyper Response.
-    pub(crate) fn into_base_response(self) -> HttpResult<BaseResponse<Body>> {
+    pub(crate) fn into_base_response(self) -> BaseHttpResult<BaseResponse<Body>> {
         let mut builder = BaseResponse::builder();
 
         for (header, value) in self.headers {
@@ -137,7 +198,16 @@ impl Response {
     }
 }
 
-impl Error for Response {}
+// impl Error for Response {}
+
+impl<E> From<E> for Response
+where
+    E: Error + Send + Sync + 'static,
+{
+    fn from(err: E) -> Self {
+        Self::internal_server_error().body(err.to_string()).build()
+    }
+}
 
 impl Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -166,6 +236,10 @@ impl HasHeaders for Response {
     /// Returns the response's headers.
     fn headers(&self) -> &Headers {
         &self.headers
+    }
+
+    fn headers_mut(&mut self) -> &mut Headers {
+        &mut self.headers
     }
 }
 
@@ -435,13 +509,13 @@ impl ResponseBuilder {
     }
 
     /// Produces a handler response from the builder.
-    pub fn as_ok(self) -> Result<Response, anyhow::Error> {
+    pub fn as_ok(self) -> HttpResult {
         Ok(self.build())
     }
 
     /// Produces a handler response from the builder.
-    pub fn as_err(self) -> Result<Response, anyhow::Error> {
-        Err(self.build().into())
+    pub fn as_err(self) -> HttpResult {
+        Err(self.build())
     }
 }
 
@@ -461,73 +535,5 @@ impl Default for ResponseBuilder {
             body: None,
             message: None,
         }
-    }
-}
-
-pub struct FakeResponse(Response);
-
-impl FakeResponse {
-    pub fn new(response: Response) -> Self {
-        Self(response)
-    }
-
-    pub fn assert_status(&self, status: &StatusCode) -> &Self {
-        assert_eq!(*self.0.status(), *status);
-
-        self
-    }
-
-    pub fn assert_ok(&self) -> &Self {
-        assert_eq!(*self.0.status(), StatusCode::OK);
-
-        self
-    }
-
-    pub fn assert_created(&self) -> &Self {
-        assert_eq!(*self.0.status(), StatusCode::CREATED);
-
-        self
-    }
-
-    pub fn assert_no_content(&self) -> &Self {
-        assert_eq!(*self.0.status(), StatusCode::NO_CONTENT);
-
-        self
-    }
-
-    pub fn assert_not_found(&self) -> &Self {
-        assert_eq!(*self.0.status(), StatusCode::NOT_FOUND);
-
-        self
-    }
-
-    pub fn assert_version(&self, version: &Version) -> &Self {
-        assert_eq!(*self.0.version(), *version);
-
-        self
-    }
-
-    pub fn assert_has_header(&self, key: &str) -> &Self {
-        assert!(self.0.has_header(key));
-
-        self
-    }
-
-    pub fn assert_header_is(&self, key: &str, value: &str) -> &Self {
-        assert!(self.0.headers().is(key, value));
-
-        self
-    }
-
-    pub fn assert_header_contains(&self, key: &str, value: &str) -> &Self {
-        assert!(self.0.headers().contains(key, value));
-
-        self
-    }
-
-    pub fn assert_is_json(&self) -> &Self {
-        assert!(self.0.is_json());
-
-        self
     }
 }

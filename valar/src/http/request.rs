@@ -5,16 +5,11 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use colored::Colorize;
-use http::Request as BaseRequest;
-use http::Result as HttpResult;
-use hyper::Body;
 use serde::Deserialize;
 use serde_json::Result as JsonResult;
 
 use crate::http::cookie::HasCookies;
 use crate::http::headers::HasHeaders;
-// use crate::http::ErrorResponse;
-use crate::http::FakeResponse;
 use crate::http::Headers;
 use crate::http::Method;
 use crate::http::RequestCookie;
@@ -24,8 +19,7 @@ use crate::http::Version;
 use crate::routing::Route;
 use crate::utils::TruncatableToFit;
 use crate::Application;
-use crate::Error;
-use crate::FakeApplication;
+// use crate::FakeApplication;
 
 /// A request is used to store information about
 /// the incoming request.
@@ -91,6 +85,11 @@ impl Request {
     /// ```
     pub fn builder() -> RequestBuilder {
         RequestBuilder::new()
+    }
+
+    /// Creates a new GET request using the builder pattern.
+    pub fn get(uri: Uri) -> RequestBuilder {
+        RequestBuilder::new().method(Method::GET).uri(uri)
     }
 
     /// Returns the method of the HTTP request.
@@ -160,10 +159,14 @@ impl Request {
         &self.body
     }
 
+    /// Shows the current attached metadata on the
+    /// request.
     pub fn metadata(&self) -> &HashMap<String, String> {
         &self.metadata
     }
 
+    /// Returns the metadata as a mutable reference to
+    /// modify the information it contains.
     pub fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
     }
@@ -297,7 +300,7 @@ impl Request {
     /// assert_eq!(id, 1);
     /// assert!(request.parameter::<u32>("name").is_err());
     /// ```
-    pub fn parameter<T>(&self, name: &str) -> Result<T, Error>
+    pub fn parameter<T>(&self, name: &str) -> Result<T, Response>
     where
         T: FromStr,
         T::Err: std::error::Error + Sync + Send + 'static,
@@ -441,7 +444,7 @@ impl Request {
     /// assert_eq!(id, 1);
     /// assert_eq!(name, "John");
     /// ```
-    pub fn query<T>(&self, name: &str) -> Result<T, Error>
+    pub fn query<T>(&self, name: &str) -> Result<T, Response>
     where
         T: FromStr,
         T::Err: std::error::Error + Sync + Send + 'static,
@@ -519,6 +522,10 @@ impl HasHeaders for Request {
     /// ```
     fn headers(&self) -> &Headers {
         &self.headers
+    }
+
+    fn headers_mut(&mut self) -> &mut Headers {
+        &mut self.headers
     }
 }
 
@@ -648,100 +655,109 @@ impl RequestBuilder {
     }
 }
 
-pub struct FakeRequest<'a, App: Application + Send + Sync + 'static> {
-    app: &'a FakeApplication<App>,
-    method: Method,
-    uri: Uri,
-    version: Version,
-    headers: Headers,
-    body: String,
-}
-
-impl<'a, App: Application + Send + Sync + 'static> FakeRequest<'a, App> {
-    pub fn new(app: &'a FakeApplication<App>) -> FakeRequest<'a, App> {
-        FakeRequest {
-            app,
-            method: Method::default(),
-            uri: Uri::default(),
-            version: Version::default(),
-            headers: Headers::default(),
-            body: String::default(),
-        }
-    }
-
-    pub fn method(mut self, method: Method) -> Self {
-        self.method = method;
-
-        self
-    }
-
-    pub fn uri(mut self, uri: Uri) -> Self {
-        self.uri = uri;
-
-        self
-    }
-
-    pub fn path(mut self, path: &str) -> Self {
-        self.uri = Uri::builder()
-            .path_and_query(path)
-            .build()
-            .unwrap_or_default();
-
-        self
-    }
-
-    pub fn version(mut self, version: Version) -> Self {
-        self.version = version;
-
-        self
-    }
-
-    pub fn headers<H>(mut self, headers: H) -> Self
-    where
-        H: Into<Headers>,
-    {
-        self.headers = headers.into();
-
-        self
-    }
-
-    pub fn header<K, V>(mut self, key: K, value: V) -> Self
-    where
-        K: Into<String>,
-        V: Into<String>,
-    {
-        self.headers.append(key.into(), value.into());
-
-        self
-    }
-
-    pub fn body<V>(mut self, value: V) -> Self
-    where
-        V: Into<String>,
-    {
-        self.body = value.into();
-
-        self
-    }
-
-    fn into_base_request(self) -> HttpResult<BaseRequest<Body>> {
-        let mut request = BaseRequest::builder()
-            .method(self.method.clone())
-            .uri(self.uri.clone());
-
-        for (key, value) in self.headers {
-            request = request.header(key, value);
-        }
-
-        request.body(Body::from(self.body.clone()))
-    }
-
-    pub async fn send(self) -> FakeResponse {
-        let router = self.app.router();
-        let app = self.app.app_arc();
-        let request = self.into_base_request().unwrap_or_default();
-        let response = router.handle(app, request).await;
-
-        FakeResponse::new(response)
+impl From<RequestBuilder> for Request {
+    fn from(builder: RequestBuilder) -> Self {
+        builder.build()
     }
 }
+
+// pub struct FakeRequest<'a, App: Application + Send + Sync
+// + 'static> {     app: &'a FakeApplication<App>,
+//     method: Method,
+//     uri: Uri,
+//     version: Version,
+//     headers: Headers,
+//     body: String,
+// }
+
+// impl<'a, App: Application + Send + Sync + 'static>
+// FakeRequest<'a, App> {     pub fn new(app: &'a
+// FakeApplication<App>) -> FakeRequest<'a, App> {
+//         FakeRequest {
+//             app,
+//             method: Method::default(),
+//             uri: Uri::default(),
+//             version: Version::default(),
+//             headers: Headers::default(),
+//             body: String::default(),
+//         }
+//     }
+
+//     pub fn method(mut self, method: Method) -> Self {
+//         self.method = method;
+
+//         self
+//     }
+
+//     pub fn uri(mut self, uri: Uri) -> Self {
+//         self.uri = uri;
+
+//         self
+//     }
+
+//     pub fn path(mut self, path: &str) -> Self {
+//         self.uri = Uri::builder()
+//             .path_and_query(path)
+//             .build()
+//             .unwrap_or_default();
+
+//         self
+//     }
+
+//     pub fn version(mut self, version: Version) -> Self {
+//         self.version = version;
+
+//         self
+//     }
+
+//     pub fn headers<H>(mut self, headers: H) -> Self
+//     where
+//         H: Into<Headers>,
+//     {
+//         self.headers = headers.into();
+
+//         self
+//     }
+
+//     pub fn header<K, V>(mut self, key: K, value: V) ->
+// Self     where
+//         K: Into<String>,
+//         V: Into<String>,
+//     {
+//         self.headers.append(key.into(), value.into());
+
+//         self
+//     }
+
+//     pub fn body<V>(mut self, value: V) -> Self
+//     where
+//         V: Into<String>,
+//     {
+//         self.body = value.into();
+
+//         self
+//     }
+
+//     fn into_base_request(self) ->
+// HttpResult<BaseRequest<Body>> {         let mut request =
+// BaseRequest::builder()
+// .method(self.method.clone())
+// .uri(self.uri.clone());
+
+//         for (key, value) in self.headers {
+//             request = request.header(key, value);
+//         }
+
+//         request.body(Body::from(self.body.clone()))
+//     }
+
+//     pub async fn send(self) -> FakeResponse {
+//         let router = self.app.router();
+//         let app = self.app.app_arc();
+//         let request =
+// self.into_base_request().unwrap_or_default();         let
+// response = router.handle(app, request).await;
+
+//         FakeResponse::new(response)
+//     }
+// }

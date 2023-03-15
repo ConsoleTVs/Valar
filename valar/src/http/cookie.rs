@@ -14,7 +14,7 @@ use crate::http::headers::HasHeaders;
 #[error("There was an error parsing the cookie")]
 pub struct CookieParseError;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SameSite {
     /// The cookie will only be sent in a first-party
     /// context and not be sent along with requests
@@ -310,14 +310,13 @@ impl ResponseCookieBuilder {
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::cookie::ResponseCookieBuilder;
-    /// use valar::http::Cookie;
+    /// use valar::http::ResponseCookie;
     ///
-    /// let cookie = ResponseCookieBuilder::new("name", "value")
-    ///     .name("new_name")
+    /// let cookie = ResponseCookie::builder("name", "value")
+    ///     .path(Some("/path"))
     ///     .build();
     ///
-    /// assert_eq!(cookie.name(), "new_name");
+    /// assert_eq!(cookie.path(), Some("/path"));
     /// ```
     pub fn path<T>(mut self, path: Option<T>) -> Self
     where
@@ -517,13 +516,13 @@ impl FromStr for ResponseCookie {
 
     /// It will only process a single cookie. Multiple
     /// cookies sent must first be splitted acordingly.
-    ///
-    /// Also take into consideration
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let mut iter = string.trim().split('=');
 
         let name: &str = iter.next().ok_or(Self::Err {})?;
-        let value: &str = iter.next().ok_or(Self::Err {})?.trim();
+        let name = name.trim();
+        let value: &str = iter.next().ok_or(Self::Err {})?;
+        let value = value.trim();
 
         let mut iter = value.trim().split(';');
         let value: &str = iter.next().ok_or(Self::Err {})?;
@@ -697,8 +696,7 @@ mod tests {
 
         assert_eq!(
             cookie.to_string(),
-            "foo=bar; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; \
-             SameSite=Strict"
+            "foo=bar; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; SameSite=Strict"
         );
     }
 
@@ -714,8 +712,7 @@ mod tests {
     #[ignore]
     fn it_can_parse_complex_cookies() {
         let cookie = ResponseCookie::from_str(
-            "foo=bar; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; \
-             SameSite=Strict",
+            "foo=bar; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; SameSite=Strict",
         )
         .unwrap();
 
@@ -723,8 +720,8 @@ mod tests {
         assert_eq!(cookie.value(), "bar");
         assert_eq!(cookie.domain(), Some("example.com"));
         assert_eq!(cookie.max_age(), Some(&3600));
-        assert_eq!(cookie.secure(), true);
-        assert_eq!(cookie.http_only(), true);
+        assert!(cookie.secure());
+        assert!(cookie.http_only());
         assert_eq!(cookie.same_site(), Some(&SameSite::Strict));
     }
 }
