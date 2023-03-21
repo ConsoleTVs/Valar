@@ -33,10 +33,8 @@ impl Middleware for Session {
             Err(response) => response,
         };
 
-        raw_response
-            .headers_mut()
-            .append("Set-Cookie", cookie.to_string());
+        raw_response.headers_mut().set_cookie(cookie);
 
-        Ok(response?)
+        response
     }
 }

@@ -135,6 +135,86 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
         Self::Data(data)
     }
 
+    /// Adds a POST route to the router.
+    pub fn post<P, H, R>(path: P, handler: H) -> Self
+    where
+        P: Into<String>,
+        R: Future<Output = HttpResult> + Send + 'static,
+        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+    {
+        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+
+        let data = Data {
+            path: path.into(),
+            methods: vec![Method::POST],
+            handler,
+            parameters: Default::default(),
+            middlewares: Default::default(),
+        };
+
+        Self::Data(data)
+    }
+
+    /// Adds a PUT route to the router.
+    pub fn put<P, H, R>(path: P, handler: H) -> Self
+    where
+        P: Into<String>,
+        R: Future<Output = HttpResult> + Send + 'static,
+        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+    {
+        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+
+        let data = Data {
+            path: path.into(),
+            methods: vec![Method::PUT],
+            handler,
+            parameters: Default::default(),
+            middlewares: Default::default(),
+        };
+
+        Self::Data(data)
+    }
+
+    /// Adds a PATCH route to the router.
+    pub fn patch<P, H, R>(path: P, handler: H) -> Self
+    where
+        P: Into<String>,
+        R: Future<Output = HttpResult> + Send + 'static,
+        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+    {
+        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+
+        let data = Data {
+            path: path.into(),
+            methods: vec![Method::PATCH],
+            handler,
+            parameters: Default::default(),
+            middlewares: Default::default(),
+        };
+
+        Self::Data(data)
+    }
+
+    /// Adds a DELETE route to the router.
+    pub fn delete<P, H, R>(path: P, handler: H) -> Self
+    where
+        P: Into<String>,
+        R: Future<Output = HttpResult> + Send + 'static,
+        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+    {
+        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+
+        let data = Data {
+            path: path.into(),
+            methods: vec![Method::DELETE],
+            handler,
+            parameters: Default::default(),
+            middlewares: Default::default(),
+        };
+
+        Self::Data(data)
+    }
+
     /// Adds a route to the router that matches all http
     /// methods.
     pub fn any<P, H, R>(path: P, handler: H) -> Self
