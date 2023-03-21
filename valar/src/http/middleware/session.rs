@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::http::HasCookies;
-use crate::http::HasHeaders;
+use crate::http::Cookie;
 use crate::http::Request;
-use crate::http::RequestCookie;
 use crate::http::Result;
 use crate::routing::middleware::Handler;
 use crate::routing::middleware::Middleware;
@@ -14,19 +12,30 @@ pub struct Session;
 #[async_trait]
 impl Middleware for Session {
     async fn handle(&self, next: Handler, mut request: Request) -> Result {
-        if request.has_cookie("session_uuid") {
+        if request.headers().has_cookie("session_uuid") {
             return next(request).await;
         }
 
         let uuid = Uuid::now_v7();
         let cookie =
-            RequestCookie::new("session_uuid", uuid.as_hyphenated().to_string()).to_string();
+            Cookie::<Request>::builder("session_uuid", uuid.as_hyphenated().to_string()).build();
 
-        request.headers_mut().insert("Cookie", cookie);
+        request.headers_mut().set_cookie(cookie);
 
-        let response = next(request).await;
+        let mut response = next(request).await;
 
-        //
+        let cookie = Cookie::builder("session_uuid", uuid.as_hyphenated().to_string())
+            .http_only(true)
+            .build();
+
+        let raw_response = match &mut response {
+            Ok(response) => response,
+            Err(response) => response,
+        };
+
+        raw_response
+            .headers_mut()
+            .append("Set-Cookie", cookie.to_string());
 
         Ok(response?)
     }

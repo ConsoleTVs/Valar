@@ -7,6 +7,7 @@ use hyper::body::to_bytes;
 use hyper::body::HttpBody;
 use hyper::Body;
 use regex::Error as RegexError;
+use thiserror::Error as ThisError;
 
 use crate::http::Headers;
 use crate::http::Method;
@@ -17,7 +18,12 @@ use crate::routing::middleware::Middlewares;
 use crate::routing::route::Builder;
 use crate::routing::route::Config;
 use crate::routing::route::Route;
+use crate::utils::TruncatableToFit;
 use crate::Application;
+
+#[derive(Debug, ThisError)]
+#[error(transparent)]
+pub struct Error(#[from] RegexError);
 
 pub enum Pending {}
 
@@ -69,7 +75,7 @@ impl<App: Application + Send + Sync + 'static> Router<App, Pending> {
         self
     }
 
-    pub fn compile(self) -> Result<Router<App, Compiled>, RegexError> {
+    pub fn compile(self) -> Result<Router<App, Compiled>, Error> {
         let mut compiled_routes = Vec::new();
 
         let routes = match self.routes {
@@ -122,6 +128,24 @@ impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
             .expect("There should always be a fallback route in a router.")
     }
 
+    pub fn summary(&self) -> Vec<String> {
+        let summary: Vec<String> = self
+            .routes()
+            .iter()
+            .rev()
+            .map(|route| {
+                format!(
+                    "{:.<7} ⟶ {:.<33} ⟶ {:.<34}",
+                    route.method().to_string().truncate_to_fit(7),
+                    route.path().truncate_to_fit(34),
+                    route.regex().to_string().truncate_to_fit(34)
+                )
+            })
+            .collect();
+
+        summary
+    }
+
     pub(crate) async fn handle_base(&self, app: Arc<App>, request: BaseRequest<Body>) -> Response {
         let request = match Self::build_request(request).await {
             Ok(request) => request,
@@ -163,7 +187,7 @@ impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
 
         let bytes = to_bytes(base.body_mut()).await?;
 
-        let headers: Headers = base
+        let headers: Headers<Request> = base
             .headers()
             .iter()
             .map(|(key, value)| {
@@ -200,17 +224,16 @@ impl<App: Application + Send + Sync + 'static> FromIterator<Builder<App>> for Ro
     }
 }
 
-pub type Error = RegexError;
+// pub trait Routable: Sized + Application + Send + Sync +
+// 'static {     fn router() -> Router<Self>;
+//     fn compiled_router() -> Result<Arc<Router<Self,
+// Compiled>>, Error> {         let router =
+// Self::router().compile()?;         let router =
+// Arc::new(router);
 
-pub trait Routable: Sized + Application + Send + Sync + 'static {
-    fn router() -> Router<Self>;
-    fn compiled_router() -> Result<Arc<Router<Self, Compiled>>, Error> {
-        let router = Self::router().compile()?;
-        let router = Arc::new(router);
-
-        Ok(router)
-    }
-}
+//         Ok(router)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -233,7 +256,7 @@ mod tests {
     impl Application for App {}
 
     async fn handler(_app: Arc<App>, _request: Request) -> ResponseResult {
-        Response::ok().as_ok()
+        Response::ok().into_ok()
     }
 
     #[tokio::test]

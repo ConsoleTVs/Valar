@@ -14,16 +14,11 @@ use std::sync::Arc;
 
 pub use client::Client;
 pub use cookie::Cookie;
-pub use cookie::HasCookies;
-pub use cookie::RequestCookie;
-pub use cookie::ResponseCookie;
-pub use headers::HasHeaders;
 pub use headers::Headers;
 pub use http::Method;
 pub use http::StatusCode;
 pub use http::Uri;
 pub use http::Version;
-// pub use request::FakeRequest;
 pub use request::Request;
 pub use response::Response;
 pub use server::Server;

@@ -37,7 +37,7 @@ pub async fn index(app: Arc<App>, _request: Request) -> Result {
         .get(&app.database)
         .await?;
 
-    Response::ok().json(&rows)?.as_ok()
+    Response::ok().json(&rows)?.into_ok()
 }
 
 pub async fn show(app: Arc<App>, request: Request) -> Result {
@@ -49,7 +49,7 @@ pub async fn show(app: Arc<App>, request: Request) -> Result {
         .first(&app.database)
         .await?;
 
-    Response::ok().json(&user)?.as_ok()
+    Response::ok().json(&user)?.into_ok()
 }
 
 pub async fn create(app: Arc<App>, _request: Request) -> Result {
@@ -63,7 +63,7 @@ pub async fn create(app: Arc<App>, _request: Request) -> Result {
         .execute(&app.database)
         .await?;
 
-    Response::created().json(&user)?.as_ok()
+    Response::created().json(&user)?.into_ok()
 }
 
 pub async fn update(app: Arc<App>, request: Request) -> Result {
@@ -77,7 +77,7 @@ pub async fn update(app: Arc<App>, request: Request) -> Result {
         .execute(&app.database)
         .await?;
 
-    Response::ok().json(&user)?.as_ok()
+    Response::ok().json(&user)?.into_ok()
 }
 
 pub async fn delete(app: Arc<App>, request: Request) -> Result {
@@ -88,5 +88,5 @@ pub async fn delete(app: Arc<App>, request: Request) -> Result {
         .execute(&app.database)
         .await?;
 
-    Response::no_content().as_ok()
+    Response::no_content().into_ok()
 }

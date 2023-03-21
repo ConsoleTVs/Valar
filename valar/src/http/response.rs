@@ -9,11 +9,9 @@ use serde::Serialize;
 use serde_json::Error as JsonError;
 use serde_json::Result as JsonResult;
 
-use crate::http::cookie::HasCookies;
-use crate::http::headers::HasHeaders;
+use crate::http::Cookie;
 use crate::http::Headers;
 use crate::http::Request;
-use crate::http::ResponseCookie;
 use crate::http::Result as HttpResult;
 use crate::http::StatusCode;
 use crate::http::Version;
@@ -30,7 +28,7 @@ pub struct Response {
     version: Version,
 
     /// The response's headers
-    headers: Headers,
+    headers: Headers<Self>,
 
     /// The body of the response.
     body: String,
@@ -112,9 +110,15 @@ impl Response {
         &self.body
     }
 
-    /// Determines if the given header exists.
-    pub fn has_header(&self, key: &str) -> bool {
-        self.headers().has(key)
+    /// Returns the headers of the request.
+    pub fn headers(&self) -> &Headers<Self> {
+        &self.headers
+    }
+
+    /// Returns a mutable reference to the headers of the
+    /// request.
+    pub fn headers_mut(&mut self) -> &mut Headers<Self> {
+        &mut self.headers
     }
 
     /// Determines if the response contains a JSON value
@@ -160,7 +164,7 @@ impl Response {
     }
 
     pub fn assert_has_header(&self, key: &str) -> &Self {
-        assert!(self.has_header(key));
+        assert!(self.headers().has(key));
 
         self
     }
@@ -232,39 +236,16 @@ impl Display for Response {
     }
 }
 
-impl HasHeaders for Response {
-    /// Returns the response's headers.
-    fn headers(&self) -> &Headers {
-        &self.headers
-    }
-
-    fn headers_mut(&mut self) -> &mut Headers {
-        &mut self.headers
-    }
-}
-
-impl HasCookies for Response {
-    type Item = ResponseCookie;
-}
-
 pub enum ResponseMessage {
     Text(String),
     Canonical,
 }
 
 pub struct ResponseBuilder {
-    /// The response's status
     status: StatusCode,
-
-    /// The response's version
     version: Version,
-
-    /// The response's headers
-    headers: Headers,
-
-    /// The body of the response.
+    headers: Headers<Response>,
     body: Option<String>,
-
     message: Option<ResponseMessage>,
 }
 
@@ -306,10 +287,10 @@ impl ResponseBuilder {
     /// Add a cookie to the response.
     pub fn cookie<C>(mut self, cookie: C) -> Self
     where
-        C: Into<ResponseCookie>,
+        C: Into<Cookie<Response>>,
     {
-        let cookie: ResponseCookie = cookie.into();
-        self.headers.append("Set-Header", cookie.to_string());
+        let cookie: Cookie<Response> = cookie.into();
+        self.headers.set_cookie(cookie);
 
         self
     }
@@ -317,10 +298,20 @@ impl ResponseBuilder {
     /// Set the headers of the request.
     pub fn headers<H>(mut self, headers: H) -> Self
     where
-        H: Into<Headers>,
+        H: Into<Headers<Response>>,
     {
-        let headers: Headers = headers.into();
-        self.headers = headers;
+        self.headers = headers.into();
+
+        self
+    }
+
+    pub fn headers_iter<H, N, V>(mut self, headers: H) -> Self
+    where
+        H: IntoIterator<Item = (N, V)>,
+        N: Into<String>,
+        V: Into<String>,
+    {
+        self.headers = Headers::from_iter(headers);
 
         self
     }
@@ -509,12 +500,12 @@ impl ResponseBuilder {
     }
 
     /// Produces a handler response from the builder.
-    pub fn as_ok(self) -> HttpResult {
+    pub fn into_ok(self) -> HttpResult {
         Ok(self.build())
     }
 
     /// Produces a handler response from the builder.
-    pub fn as_err(self) -> HttpResult {
+    pub fn into_err(self) -> HttpResult {
         Err(self.build())
     }
 }
@@ -531,7 +522,7 @@ impl Default for ResponseBuilder {
         Self {
             status: StatusCode::OK,
             version: Version::HTTP_11,
-            headers: Headers::new(),
+            headers: Headers::default(),
             body: None,
             message: None,
         }

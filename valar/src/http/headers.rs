@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::str::FromStr;
 use std::vec::IntoIter;
 
@@ -9,6 +10,10 @@ use http::HeaderMap;
 use http::HeaderValue;
 use thiserror::Error;
 
+use crate::http::Cookie;
+use crate::http::Request;
+use crate::http::Response;
+
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error(transparent)]
@@ -18,23 +23,41 @@ pub enum ConversionError {
     ValueFailure(#[from] InvalidHeaderValue),
 }
 
-#[derive(Default, Debug)]
-pub struct Headers(HashMap<String, Vec<String>>);
+#[derive(Debug)]
+pub struct Headers<T> {
+    headers: HashMap<String, Vec<String>>,
+    _marker: PhantomData<T>,
+}
 
-impl Headers {
+impl<T> Default for Headers<T> {
+    fn default() -> Self {
+        Self {
+            headers: HashMap::new(),
+            _marker: PhantomData::<T>,
+        }
+    }
+}
+
+impl<T> Headers<T> {
     /// Creates a new headers structure
     /// with the default fields.
     ///
     /// # Example
     /// ```no_run
-    /// use valar::http::Headers;
+    /// use std::collections::HashMap;
     ///
-    /// let headers = Headers::new();
+    /// use valar::http::Headers;
+    /// use valar::http::Request;
+    ///
+    /// let headers: Headers<Request> = Headers::new(HashMap::new());
     ///
     /// assert_eq!(headers.len(), 0);
     /// ```
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(headers: HashMap<String, Vec<String>>) -> Self {
+        Self {
+            headers,
+            ..Self::default()
+        }
     }
 
     /// Returns the number of headers
@@ -43,8 +66,9 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::new();
+    /// let mut headers: Headers<Request> = Headers::default();
     ///
     /// assert_eq!(headers.len(), 0);
     ///
@@ -53,11 +77,11 @@ impl Headers {
     /// assert_eq!(headers.len(), 1);
     /// ```
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.headers.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.headers.is_empty()
     }
 
     /// Returns the number of values
@@ -68,8 +92,9 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::new();
+    /// let mut headers: Headers<Request> = Headers::default();
     ///
     /// assert_eq!(headers.len_of("Content-Type"), 0);
     ///
@@ -94,13 +119,15 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// assert!(headers.has("Content-Type"));
     /// ```
     pub fn has(&self, header: &str) -> bool {
-        self.0.contains_key(&header.to_lowercase())
+        self.headers.contains_key(&header.to_lowercase())
     }
 
     /// Only checks the first value of the header.
@@ -109,8 +136,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// assert!(headers.is("Content-Type", "application/json"));
     /// ```
@@ -127,8 +156,9 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers =
+    /// let mut headers: Headers<Request> =
     ///     Headers::from([("Content-Type", "application/json; charset=utf-8")]);
     ///
     /// assert!(headers.contains("Content-Type", "application/json"));
@@ -146,8 +176,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// assert_eq!(
     ///     headers.get("Content-Type"),
@@ -155,11 +187,11 @@ impl Headers {
     /// );
     /// ```
     pub fn get(&self, header: &str) -> Option<&Vec<String>> {
-        self.0.get(&header.to_lowercase())
+        self.headers.get(&header.to_lowercase())
     }
 
     pub fn get_mut(&mut self, header: &str) -> Option<&mut Vec<String>> {
-        self.0.get_mut(&header.to_lowercase())
+        self.headers.get_mut(&header.to_lowercase())
     }
 
     /// Gets the first value associated
@@ -168,8 +200,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// assert_eq!(headers.first("Content-Type"), Some("application/json"));
     /// ```
@@ -183,8 +217,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// headers.insert("Content-Type", "text/plain");
     ///
@@ -193,15 +229,45 @@ impl Headers {
     ///     Some(&vec!["text/plain".to_string()])
     /// );
     /// ```
-    pub fn insert<H, T>(&mut self, header: H, value: T) -> &mut Self
+    pub fn insert<H, V>(&mut self, header: H, value: V)
     where
         H: Into<String>,
-        T: Into<String>,
+        V: Into<String>,
     {
         let header: String = header.into();
-        self.0.insert(header.to_lowercase(), vec![value.into()]);
+        self.headers
+            .insert(header.to_lowercase(), vec![value.into()]);
+    }
 
-        self
+    /// Replaces a given header with the given
+    /// values. Removes any previous values for that header.
+    /// If the header does not exist, it will be created.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use valar::http::Headers;
+    /// use valar::http::Request;
+    ///
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
+    ///
+    /// headers.insert_many("Content-Type", vec!["text/plain", "text/html"]);
+    ///
+    /// assert_eq!(
+    ///     headers.get("Content-Type"),
+    ///     Some(&vec!["text/plain".to_string(), "text/html".to_string()])
+    /// );
+    /// ```
+    pub fn insert_many<H, V>(&mut self, header: H, values: Vec<V>)
+    where
+        H: Into<String>,
+        V: Into<String>,
+    {
+        let header: String = header.into();
+        self.headers.insert(
+            header.to_lowercase(),
+            values.into_iter().map(|value| value.into()).collect(),
+        );
     }
 
     /// Appends a value to the given header.
@@ -212,8 +278,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// headers.append("Content-Type", "text/plain");
     ///
@@ -225,20 +293,17 @@ impl Headers {
     ///     ])
     /// );
     /// ```
-    pub fn append<H, T>(&mut self, header: H, value: T) -> &mut Self
+    pub fn append<H, V>(&mut self, header: H, value: V)
     where
         H: Into<String>,
-        T: Into<String>,
+        V: Into<String>,
     {
         let header: String = header.into();
 
-        if let Some(values) = self.get_mut(&header) {
-            values.push(value.into());
-
-            return self;
-        }
-
-        self.insert(header, value)
+        match self.get_mut(&header) {
+            Some(values) => values.push(value.into()),
+            None => self.insert(header, value),
+        };
     }
 
     /// Appends many values to the given header.
@@ -249,8 +314,10 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// headers.append_many("Content-Type", vec!["text/plain", "text/html"]);
     ///
@@ -263,51 +330,19 @@ impl Headers {
     ///     ])
     /// );
     /// ```
-    pub fn append_many<H, T>(&mut self, header: H, values: Vec<T>) -> &mut Self
+    pub fn append_many<H, V>(&mut self, header: H, values: Vec<V>)
     where
         H: Into<String>,
-        T: Into<String>,
+        V: Into<String>,
     {
         let header: String = header.into();
+
         if let Some(current) = self.get_mut(&header) {
             let values = values.into_iter().map(|value| value.into());
-            current.extend(values);
-
-            return self;
+            return current.extend(values);
         }
 
-        self.replace(header, values)
-    }
-
-    /// Replaces a given header with the given
-    /// values. Removes any previous values for that header.
-    /// If the header does not exist, it will be created.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use valar::http::Headers;
-    ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
-    ///
-    /// headers.replace("Content-Type", vec!["text/plain", "text/html"]);
-    ///
-    /// assert_eq!(
-    ///     headers.get("Content-Type"),
-    ///     Some(&vec!["text/plain".to_string(), "text/html".to_string()])
-    /// );
-    /// ```
-    pub fn replace<H, T>(&mut self, header: H, values: Vec<T>) -> &mut Self
-    where
-        H: Into<String>,
-        T: Into<String>,
-    {
-        let header: String = header.into();
-        self.0.insert(
-            header.to_lowercase(),
-            values.into_iter().map(|value| value.into()).collect(),
-        );
-
-        self
+        self.insert_many(header, values);
     }
 
     /// Removes a given header.
@@ -318,21 +353,22 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
+    /// use valar::http::Response;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::<Request>::from([("Content-Type", "application/json")]);
     ///
     /// headers.remove("Content-Type");
     ///
     /// assert_eq!(headers.get("Content-Type"), None);
     /// ```
-    pub fn remove<H>(&mut self, header: H) -> &mut Self
+    pub fn remove<H>(&mut self, header: H)
     where
         H: Into<String>,
     {
         let header: String = header.into();
-        self.0.remove(&header.to_lowercase());
-
-        self
+        self.headers.remove(&header.to_lowercase());
     }
 
     /// Clears all the headers.
@@ -341,21 +377,89 @@ impl Headers {
     /// # Example
     /// ```no_run
     /// use valar::http::Headers;
+    /// use valar::http::Request;
     ///
-    /// let mut headers = Headers::from([("Content-Type", "application/json")]);
+    /// let mut headers: Headers<Request> =
+    ///     Headers::from([("Content-Type", "application/json")]);
     ///
     /// headers.clear();
     ///
     /// assert_eq!(headers.len(), 0);
     /// ```
-    pub fn clear(&mut self) -> &mut Self {
-        self.0.clear();
-
-        self
+    pub fn clear(&mut self) {
+        self.headers.clear();
     }
 }
 
-impl IntoIterator for Headers {
+impl Headers<Request> {
+    /// Computes and creates the cookies based on the
+    /// `Cookie` header.
+    pub fn cookies(&self) -> Vec<Cookie<Request>> {
+        match self.get("Cookie") {
+            Some(values) => values
+                .iter()
+                .flat_map(|value| Cookie::<Request>::from_str(value))
+                .collect(),
+            None => vec![],
+        }
+    }
+
+    pub fn cookie(&self, name: &str) -> Option<Cookie<Request>> {
+        self.cookies()
+            .into_iter()
+            .find(|cookie| cookie.name() == name)
+    }
+
+    pub fn has_cookie(&self, name: &str) -> bool {
+        self.cookie(name).is_some()
+    }
+
+    /// Sets the cookie using the `Cookie` header.
+    pub fn set_cookie<C>(&mut self, cookie: C)
+    where
+        C: Into<Cookie<Request>>,
+    {
+        let cookie: Cookie<Request> = cookie.into();
+
+        self.append("Cookie", cookie.to_string());
+    }
+}
+
+impl Headers<Response> {
+    /// Computes and creates the cookies based on the
+    /// `Set-Cookie` header.
+    pub fn cookies(&self) -> Vec<Cookie<Request>> {
+        match self.get("Set-Cookie") {
+            Some(values) => values
+                .iter()
+                .flat_map(|value| Cookie::<Request>::from_str(value))
+                .collect(),
+            None => vec![],
+        }
+    }
+
+    pub fn cookie(&self, name: &str) -> Option<Cookie<Request>> {
+        self.cookies()
+            .into_iter()
+            .find(|cookie| cookie.name() == name)
+    }
+
+    pub fn has_cookie(&self, name: &str) -> bool {
+        self.cookie(name).is_some()
+    }
+
+    /// Sets the cookie using the `Set-Cookie` header.
+    pub fn set_cookie<C>(&mut self, cookie: C)
+    where
+        C: Into<Cookie<Response>>,
+    {
+        let cookie: Cookie<Response> = cookie.into();
+
+        self.append("Set-Cookie", cookie.to_string());
+    }
+}
+
+impl<T> IntoIterator for Headers<T> {
     type IntoIter = IntoIter<Self::Item>;
     type Item = (String, String);
 
@@ -363,7 +467,7 @@ impl IntoIterator for Headers {
     fn into_iter(self) -> Self::IntoIter {
         let mut result: Vec<(String, String)> = Vec::new();
 
-        for (header, values) in self.0 {
+        for (header, values) in self.headers {
             for value in values {
                 result.push((header.clone(), value));
             }
@@ -373,48 +477,47 @@ impl IntoIterator for Headers {
     }
 }
 
-impl Extend<(String, String)> for Headers {
+impl<T> Extend<(String, String)> for Headers<T> {
     /// Extends the headers with the given iterator.
-    fn extend<T: IntoIterator<Item = (String, String)>>(&mut self, iter: T) {
+    fn extend<I: IntoIterator<Item = (String, String)>>(&mut self, iter: I) {
         for (header, value) in iter {
             self.append(header, value);
         }
     }
 }
 
-impl<H, V> FromIterator<(H, V)> for Headers
+impl<T, H, V, const N: usize> From<[(H, V); N]> for Headers<T>
+where
+    H: Into<String>,
+    V: Into<String>,
+{
+    fn from(value: [(H, V); N]) -> Self {
+        Headers::<T>::from_iter(value)
+    }
+}
+
+impl<T, H, V> FromIterator<(H, V)> for Headers<T>
 where
     H: Into<String>,
     V: Into<String>,
 {
     /// Creates a new `Headers` from an iterator.
-    fn from_iter<T: IntoIterator<Item = (H, V)>>(iter: T) -> Self {
-        let mut headers = Self::new();
+    fn from_iter<I: IntoIterator<Item = (H, V)>>(iter: I) -> Self {
+        let mut headers = Self::default();
 
         for (header, value) in iter {
-            headers.insert(header, value);
+            headers.append(header, value);
         }
 
         headers
     }
 }
 
-impl<H, V, const N: usize> From<[(H, V); N]> for Headers
-where
-    H: Into<String>,
-    V: Into<String>,
-{
-    /// Creates a new `Headers` from an array.
-    fn from(values: [(H, V); N]) -> Self {
-        Self::from_iter(values)
-    }
-}
-
-impl TryFrom<Headers> for HeaderMap {
+impl<T> TryFrom<Headers<T>> for HeaderMap {
     type Error = ConversionError;
 
     /// Converts the `Headers` into a `HeaderMap`.
-    fn try_from(from: Headers) -> Result<Self, Self::Error> {
+    fn try_from(from: Headers<T>) -> Result<Self, Self::Error> {
         let mut headers = Self::new();
 
         for (header, value) in from {
@@ -426,9 +529,4 @@ impl TryFrom<Headers> for HeaderMap {
 
         Ok(headers)
     }
-}
-
-pub trait HasHeaders {
-    fn headers(&self) -> &Headers;
-    fn headers_mut(&mut self) -> &mut Headers;
 }

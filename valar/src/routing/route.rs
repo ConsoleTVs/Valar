@@ -92,7 +92,7 @@ async fn not_found_handler<App: Application>(_app: Arc<App>, request: Request) -
             request.method(),
             request.uri()
         ))
-        .as_ok()
+        .into_ok()
 }
 
 impl<App: Application + Send + Sync + 'static> Builder<App> {
@@ -168,7 +168,7 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
         Self::Data(data)
     }
 
-    pub fn middleware<M, R>(mut self, middleware: M) -> Self
+    pub fn middleware<M>(mut self, middleware: M) -> Self
     where
         M: Middleware + Send + Sync + 'static,
     {
@@ -252,9 +252,7 @@ impl<App: Application + Send + Sync + 'static> Data<App> {
 
     pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
-
         let regex = self.to_regex()?;
-
         let middlewares = Middlewares::from_iter([&config.middlewares, &self.middlewares]);
         let handler = middlewares.wrap(self.handler.clone());
 

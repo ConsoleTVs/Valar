@@ -7,8 +7,6 @@ use uuid::Uuid;
 
 use crate::drivers::cache;
 use crate::drivers::Cache;
-use crate::http::Cookie;
-use crate::http::HasCookies;
 use crate::http::Request;
 
 #[derive(Error, Debug)]
@@ -116,7 +114,10 @@ impl TryFrom<&Request> for Session {
     type Error = Error;
 
     fn try_from(request: &Request) -> Result<Self, Self::Error> {
-        let cookie = request.cookie("session_uuid").ok_or(Error::NoSessionUuid)?;
+        let cookie = request
+            .headers()
+            .cookie("session_uuid")
+            .ok_or(Error::NoSessionUuid)?;
         let uuid = Uuid::from_str(cookie.value())?;
         let session = Session::from(uuid);
 

@@ -8,11 +8,9 @@ use colored::Colorize;
 use serde::Deserialize;
 use serde_json::Result as JsonResult;
 
-use crate::http::cookie::HasCookies;
-use crate::http::headers::HasHeaders;
+use crate::http::Cookie;
 use crate::http::Headers;
 use crate::http::Method;
-use crate::http::RequestCookie;
 use crate::http::Response;
 use crate::http::Uri;
 use crate::http::Version;
@@ -30,29 +28,13 @@ use crate::Application;
 /// Althought it is possible using the provided builder.
 #[derive(Debug)]
 pub struct Request {
-    /// Stores the full request URI.
-    /// The request's method
     method: Method,
-
-    /// The request's URI
     uri: Uri,
-
-    /// The request's version
     version: Version,
-
-    /// The request's headers
-    headers: Headers,
-
-    /// The request's body
+    headers: Headers<Self>,
     body: String,
-
-    /// The URL parameters.
     route_parameters: HashMap<String, String>,
-
-    /// The URI query parameters.
     query_parameters: HashMap<String, String>,
-
-    /// Stores additional request metadata.
     metadata: HashMap<String, String>,
 }
 
@@ -169,6 +151,17 @@ impl Request {
     /// modify the information it contains.
     pub fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
+    }
+
+    /// Returns the headers of the request.
+    pub fn headers(&self) -> &Headers<Self> {
+        &self.headers
+    }
+
+    /// Returns a mutable reference to the headers of the
+    /// request.
+    pub fn headers_mut(&mut self) -> &mut Headers<Self> {
+        &mut self.headers
     }
 
     /// Returns true if the request is considered to have a
@@ -501,44 +494,44 @@ impl Display for Request {
     }
 }
 
-impl HasHeaders for Request {
-    /// Returns the headers of the HTTP request as a
-    /// HashMap. The keys are the header names and the
-    /// values are the header values.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::collections::HashMap;
-    ///
-    /// use valar::http::HasHeaders;
-    /// use valar::http::Request;
-    ///
-    /// let request = Request::builder()
-    ///     .headers([("Content-Type", "application/json")])
-    ///     .build();
-    ///
-    /// assert!(request.headers().is("Content-Type", "application/json"));
-    /// ```
-    fn headers(&self) -> &Headers {
-        &self.headers
-    }
+// impl HasHeaders for Request {
+//     /// Returns the headers of the HTTP request as a
+//     /// HashMap. The keys are the header names and the
+//     /// values are the header values.
+//     ///
+//     /// # Example
+//     ///
+//     /// ```no_run
+//     /// use std::collections::HashMap;
+//     ///
+//     /// use valar::http::HasHeaders;
+//     /// use valar::http::Request;
+//     ///
+//     /// let request = Request::builder()
+//     ///     .headers([("Content-Type",
+// "application/json")])     ///     .build();
+//     ///
+//     /// assert!(request.headers().is("Content-Type",
+// "application/json"));     /// ```
+//     fn headers(&self) -> &Headers {
+//         &self.headers
+//     }
 
-    fn headers_mut(&mut self) -> &mut Headers {
-        &mut self.headers
-    }
-}
+//     fn headers_mut(&mut self) -> &mut Headers {
+//         &mut self.headers
+//     }
+// }
 
-impl HasCookies for Request {
-    type Item = RequestCookie;
-}
+// impl HasCookies for Request {
+//     type Item = RequestCookie;
+// }
 
 #[derive(Default)]
 pub struct RequestBuilder {
     method: Method,
     uri: Uri,
     version: Version,
-    headers: Headers,
+    headers: Headers<Request>,
     body: String,
     route_parameters: HashMap<String, String>,
     metadata: HashMap<String, String>,
@@ -557,9 +550,9 @@ impl RequestBuilder {
 
     pub fn cookie<C>(self, cookie: C) -> Self
     where
-        C: Into<RequestCookie>,
+        C: Into<Cookie<Request>>,
     {
-        let cookie: RequestCookie = cookie.into();
+        let cookie: Cookie<Request> = cookie.into();
 
         self.header("Cookie", cookie.to_string())
     }
@@ -609,10 +602,20 @@ impl RequestBuilder {
 
     pub fn headers<H>(mut self, headers: H) -> Self
     where
-        H: Into<Headers>,
+        H: Into<Headers<Request>>,
     {
-        let headers: Headers = headers.into();
-        self.headers = headers;
+        self.headers = headers.into();
+
+        self
+    }
+
+    pub fn headers_iter<H, N, V>(mut self, headers: H) -> Self
+    where
+        H: IntoIterator<Item = (N, V)>,
+        N: Into<String>,
+        V: Into<String>,
+    {
+        self.headers = Headers::from_iter(headers);
 
         self
     }
