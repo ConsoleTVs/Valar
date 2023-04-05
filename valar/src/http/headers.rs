@@ -194,6 +194,12 @@ impl<T> Headers<T> {
         self.headers.get_mut(&header.to_lowercase())
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.headers
+            .iter()
+            .flat_map(|(header, values)| values.iter().map(move |value| (header, value)))
+    }
+
     /// Gets the first value associated
     /// with a header name.
     ///

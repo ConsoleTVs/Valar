@@ -1,26 +1,20 @@
-pub mod memory;
-
 use std::time::Duration;
 
 use async_trait::async_trait;
-pub use memory::MemoryCache;
 use thiserror::Error;
 use tokio::time::Instant;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Cache key not found: {0}")]
+    #[error("Session key not found: {0}")]
     NotFound(String),
 
-    #[error(transparent)]
-    Deserialize(serde_json::Error),
-
-    #[error(transparent)]
-    Serialize(serde_json::Error),
+    #[error("Session key expired: {0}")]
+    Expired(String),
 }
 
 #[async_trait]
-pub trait Cache {
+pub trait Session {
     async fn get(&self, key: &str) -> Result<String, Error>;
 
     async fn insert(&self, key: String, value: String) -> Result<(), Error>;

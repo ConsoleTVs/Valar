@@ -2,12 +2,15 @@ pub mod app;
 pub mod http;
 pub mod routes;
 
-pub use app::App;
+use std::sync::Arc;
+
 use valar::http::Server;
+
+use crate::app::App;
 
 #[tokio::main]
 async fn main() {
-    let app = App::create().await;
+    let app = Arc::new(App::create().await);
     let router = App::router().unwrap();
 
     Server::builder()

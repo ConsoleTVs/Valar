@@ -21,16 +21,9 @@ use crate::utils::TruncatableToFit;
 /// to the client.
 #[derive(Debug)]
 pub struct Response {
-    /// The response's status
     status: StatusCode,
-
-    /// The response's version
     version: Version,
-
-    /// The response's headers
     headers: Headers<Self>,
-
-    /// The body of the response.
     body: String,
 }
 
@@ -65,6 +58,27 @@ impl Response {
     /// Returns a response builder with an ok status code.
     pub fn ok() -> ResponseBuilder {
         Self::builder().ok()
+    }
+
+    pub fn redirect<P>(location: P) -> ResponseBuilder
+    where
+        P: Into<String>,
+    {
+        Self::builder().redirect(location)
+    }
+
+    pub fn temporary_redirect<P>(location: P) -> ResponseBuilder
+    where
+        P: Into<String>,
+    {
+        Self::builder().temporary_redirect(location)
+    }
+
+    pub fn permanent_redirect<P>(location: P) -> ResponseBuilder
+    where
+        P: Into<String>,
+    {
+        Self::builder().permanent_redirect(location)
     }
 
     /// Returns a response builder with a created status
@@ -373,6 +387,50 @@ impl ResponseBuilder {
     /// Sets the status code to INTERNAL SERVER ERROR.
     pub fn payload_too_large(mut self) -> Self {
         self.status = StatusCode::PAYLOAD_TOO_LARGE;
+
+        self
+    }
+
+    pub fn see_other<L>(mut self, location: L) -> Self
+    where
+        L: Into<String>,
+    {
+        self.headers.insert("Location", location);
+        self.status = StatusCode::SEE_OTHER;
+
+        self
+    }
+
+    /// Alias to see_other. Use when the redirect is a
+    /// direct response to a POST / PUT action where the
+    /// request is intended to go.
+    pub fn redirect<L>(self, location: L) -> Self
+    where
+        L: Into<String>,
+    {
+        self.see_other(location)
+    }
+
+    /// Temporary redirect. Use when the resource is now
+    /// located at a different URI temporarily.
+    pub fn temporary_redirect<L>(mut self, location: L) -> Self
+    where
+        L: Into<String>,
+    {
+        self.headers.insert("Location", location);
+        self.status = StatusCode::TEMPORARY_REDIRECT;
+
+        self
+    }
+
+    /// Permanent redirect. Use when the resource is now
+    /// located at a different URI permanently.
+    pub fn permanent_redirect<L>(mut self, location: L) -> Self
+    where
+        L: Into<String>,
+    {
+        self.headers.insert("Location", location);
+        self.status = StatusCode::PERMANENT_REDIRECT;
 
         self
     }

@@ -1,32 +1,34 @@
-use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use valar::database::Database;
-use valar::drivers::cache::MemoryCache;
+use valar::services::cache::MemoryCache;
+use valar::services::Cache;
 use valar::Application;
 
 pub struct App {
     pub database: Database,
-    pub cache: MemoryCache,
+    pub cache: Box<dyn Cache + Send + Sync>,
 }
-#[async_trait]
+
 impl Application for App {}
 
 impl App {
-    pub async fn create() -> Arc<Self> {
+    fn cache() -> impl Cache + Send + Sync {
+        MemoryCache::with_purge_interval(Duration::from_secs(1))
+    }
+
+    pub async fn create() -> Self {
         let database = Database::connect("host=localhost user=erik dbname=valar")
             .await
             .expect("Unable to connect to the database");
 
-        let cache = MemoryCache::with_purge_interval(Duration::from_secs(1));
-
-        let app = Self { database, cache };
-
-        Arc::new(app)
+        Self {
+            database,
+            cache: Box::new(Self::cache()),
+        }
     }
 
-    pub async fn fake() -> Arc<Self> {
+    pub async fn fake() -> Self {
         Self::create().await
     }
 }

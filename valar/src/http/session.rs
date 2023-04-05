@@ -5,9 +5,9 @@ use thiserror::Error;
 use tokio::time::Instant;
 use uuid::Uuid;
 
-use crate::drivers::cache;
-use crate::drivers::Cache;
 use crate::http::Request;
+use crate::services::cache;
+use crate::services::Cache;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -55,27 +55,32 @@ impl Insert {
         self
     }
 
-    pub async fn on<C>(self, cache: &C) -> Result<(), cache::Error>
+    pub async fn on<C, V>(self, cache: V) -> Result<(), cache::Error>
     where
-        C: Cache,
+        C: Cache + ?Sized,
+        V: AsRef<C>,
     {
         let key = format!("session:{}:{}", self.session.0.as_hyphenated(), self.key);
         let expires_at = self
             .expires_at
             .unwrap_or_else(|| Instant::now() + Duration::from_secs(60 * 60 * 24));
 
-        cache.insert_until(key, self.value, expires_at).await
+        cache
+            .as_ref()
+            .insert_until(key, self.value, expires_at)
+            .await
     }
 }
 
 impl Obtain {
-    pub async fn on<C>(self, cache: &C) -> Result<String, cache::Error>
+    pub async fn on<C, V>(self, cache: V) -> Result<String, cache::Error>
     where
-        C: Cache,
+        C: Cache + ?Sized,
+        V: AsRef<C>,
     {
         let key = format!("session:{}:{}", self.session.0.as_hyphenated(), self.key);
 
-        cache.get(&key).await
+        cache.as_ref().get(&key).await
     }
 }
 
@@ -105,8 +110,8 @@ impl Session {
 }
 
 impl From<Uuid> for Session {
-    fn from(session: Uuid) -> Self {
-        Self(session)
+    fn from(uuid: Uuid) -> Self {
+        Self(uuid)
     }
 }
 

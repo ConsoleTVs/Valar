@@ -3,11 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use tokio::spawn;
 use tokio::time::interval;
 use tokio::time::Instant;
 
-use crate::drivers::cache::Error;
-use crate::drivers::Cache;
+use crate::services::cache::Error;
+use crate::services::Cache;
 use crate::State;
 
 /// A memory cache implementation that has a passive and
@@ -27,7 +28,7 @@ impl MemoryCache {
         let expirations = memory.expirations.clone();
 
         // Passive elimination of expired entries.
-        tokio::spawn(async move {
+        spawn(async move {
             let mut interval = interval(purge_interval);
 
             loop {
@@ -73,7 +74,7 @@ impl Cache for MemoryCache {
             if Instant::now() > *expiration {
                 state.remove(key);
                 expirations.remove(key);
-                return Err(Error::NotFound(key.to_string()));
+                return Err(Error::Expired(key.to_string()));
             }
         }
 

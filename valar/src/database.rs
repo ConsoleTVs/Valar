@@ -18,8 +18,7 @@ pub struct Database {
 
 impl Database {
     pub async fn connect(url: &str) -> Result<Database, PGError> {
-        let (client, connection) =
-            tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
+        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
