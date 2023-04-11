@@ -1,20 +1,21 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use valar::database::Database;
 use valar::services::cache::MemoryCache;
-use valar::services::Cache;
+use valar::services::Cacheable;
 use valar::Application;
 
 pub struct App {
     pub database: Database,
-    pub cache: Box<dyn Cache + Send + Sync>,
+    pub cache: Arc<Cacheable>,
 }
 
 impl Application for App {}
 
 impl App {
-    fn cache() -> impl Cache + Send + Sync {
-        MemoryCache::with_purge_interval(Duration::from_secs(1))
+    fn cache() -> Arc<Cacheable> {
+        Arc::new(MemoryCache::new(Duration::from_secs(1)))
     }
 
     pub async fn create() -> Self {
@@ -24,7 +25,7 @@ impl App {
 
         Self {
             database,
-            cache: Box::new(Self::cache()),
+            cache: Self::cache(),
         }
     }
 

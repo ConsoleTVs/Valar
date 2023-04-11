@@ -1,5 +1,4 @@
 pub mod cache;
-pub mod session;
 
 pub use cache::Cache;
-pub use session::Session;
+pub use cache::Cacheable;

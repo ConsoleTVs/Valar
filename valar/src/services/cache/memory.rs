@@ -19,7 +19,7 @@ pub struct MemoryCache {
 }
 
 impl MemoryCache {
-    pub fn with_purge_interval(purge_interval: Duration) -> Self {
+    pub fn new(purge_interval: Duration) -> Self {
         let memory = Self {
             state: Arc::default(),
             expirations: Arc::default(),

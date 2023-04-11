@@ -1,7 +1,6 @@
 pub mod app;
 pub mod http;
 pub mod routes;
-
 use std::sync::Arc;
 
 use valar::http::Server;

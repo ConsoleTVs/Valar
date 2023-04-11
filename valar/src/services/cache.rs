@@ -16,6 +16,8 @@ pub enum Error {
     Expired(String),
 }
 
+pub type Cacheable = dyn Cache + Send + Sync;
+
 #[async_trait]
 pub trait Cache {
     async fn get(&self, key: &str) -> Result<String, Error>;

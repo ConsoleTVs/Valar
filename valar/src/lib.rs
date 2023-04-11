@@ -1,5 +1,6 @@
 pub mod app;
 pub mod database;
+pub mod facades;
 pub mod http;
 pub mod routing;
 pub mod services;
