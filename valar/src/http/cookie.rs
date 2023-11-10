@@ -470,9 +470,9 @@ impl CookieBuilder<Response> {
     }
 }
 
-impl From<CookieBuilder<Request>> for Cookie<Request> {
+impl<App: Send + Sync + 'static> From<CookieBuilder<Request<App>>> for Cookie<Request<App>> {
     /// Converts the cookie builder into a cookie.
-    fn from(builder: CookieBuilder<Request>) -> Self {
+    fn from(builder: CookieBuilder<Request<App>>) -> Self {
         Self {
             name: builder.name,
             value: builder.value,
@@ -482,7 +482,7 @@ impl From<CookieBuilder<Request>> for Cookie<Request> {
             secure: builder.secure,
             http_only: builder.http_only,
             same_site: builder.same_site,
-            _marker: PhantomData::<Request>,
+            _marker: PhantomData::<Request<App>>,
         }
     }
 }
@@ -526,7 +526,7 @@ impl FromStr for Cookie<Response> {
     }
 }
 
-impl FromStr for Cookie<Request> {
+impl<App: Send + Sync + 'static> FromStr for Cookie<Request<App>> {
     type Err = Error;
 
     /// It will only process a single cookie. Multiple
@@ -545,7 +545,7 @@ impl FromStr for Cookie<Request> {
     }
 }
 
-impl Display for Cookie<Request> {
+impl<App: Send + Sync + 'static> Display for Cookie<Request<App>> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "{}={}", self.name(), self.value())
     }
@@ -657,7 +657,8 @@ mod tests {
 
     #[test]
     fn it_can_create_simple_cookies() {
-        let cookie = Cookie::<Request>::builder("foo", "bar").build();
+        struct App;
+        let cookie = Cookie::<Request<App>>::builder("foo", "bar").build();
 
         assert_eq!(cookie.to_string(), "foo=bar");
     }
@@ -681,7 +682,8 @@ mod tests {
 
     #[test]
     fn it_can_parse_simple_cookies() {
-        let cookie = Cookie::<Request>::from_str("foo=bar").unwrap();
+        struct App;
+        let cookie = Cookie::<Request<App>>::from_str("foo=bar").unwrap();
 
         assert_eq!(cookie.name(), "foo");
         assert_eq!(cookie.value(), "bar");

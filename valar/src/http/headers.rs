@@ -397,20 +397,20 @@ impl<T> Headers<T> {
     }
 }
 
-impl Headers<Request> {
+impl<App: Send + Sync + 'static> Headers<Request<App>> {
     /// Computes and creates the cookies based on the
     /// `Cookie` header.
-    pub fn cookies(&self) -> Vec<Cookie<Request>> {
+    pub fn cookies(&self) -> Vec<Cookie<Request<App>>> {
         match self.get("Cookie") {
             Some(values) => values
                 .iter()
-                .flat_map(|value| Cookie::<Request>::from_str(value))
+                .flat_map(|value| Cookie::<Request<App>>::from_str(value))
                 .collect(),
             None => vec![],
         }
     }
 
-    pub fn cookie(&self, name: &str) -> Option<Cookie<Request>> {
+    pub fn cookie(&self, name: &str) -> Option<Cookie<Request<App>>> {
         self.cookies()
             .into_iter()
             .find(|cookie| cookie.name() == name)
@@ -423,9 +423,9 @@ impl Headers<Request> {
     /// Sets the cookie using the `Cookie` header.
     pub fn set_cookie<C>(&mut self, cookie: C)
     where
-        C: Into<Cookie<Request>>,
+        C: Into<Cookie<Request<App>>>,
     {
-        let cookie: Cookie<Request> = cookie.into();
+        let cookie: Cookie<Request<App>> = cookie.into();
 
         self.append("Cookie", cookie.to_string());
     }
@@ -434,17 +434,17 @@ impl Headers<Request> {
 impl Headers<Response> {
     /// Computes and creates the cookies based on the
     /// `Set-Cookie` header.
-    pub fn cookies(&self) -> Vec<Cookie<Request>> {
+    pub fn cookies(&self) -> Vec<Cookie<Response>> {
         match self.get("Set-Cookie") {
             Some(values) => values
                 .iter()
-                .flat_map(|value| Cookie::<Request>::from_str(value))
+                .flat_map(|value| Cookie::<Response>::from_str(value))
                 .collect(),
             None => vec![],
         }
     }
 
-    pub fn cookie(&self, name: &str) -> Option<Cookie<Request>> {
+    pub fn cookie(&self, name: &str) -> Option<Cookie<Response>> {
         self.cookies()
             .into_iter()
             .find(|cookie| cookie.name() == name)

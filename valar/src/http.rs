@@ -1,12 +1,11 @@
 pub mod client;
+pub mod context;
 pub mod cookie;
-// pub mod error;
 pub mod headers;
 pub mod middleware;
 pub mod request;
 pub mod response;
 pub mod server;
-pub mod session;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -29,7 +28,7 @@ pub type Result = std::result::Result<Response, Response>;
 /// A route handler is an async function that takes
 /// a request and returns a response.
 pub type Handler<App> = Arc<
-    dyn Fn(Arc<App>, Request) -> Pin<Box<dyn Future<Output = Result> + Send + 'static>>
+    dyn Fn(Request<App>) -> Pin<Box<dyn Future<Output = Result> + Send + 'static>>
         + Send
         + Sync
         + 'static,

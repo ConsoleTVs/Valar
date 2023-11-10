@@ -1,11 +1,9 @@
-pub mod app;
+pub mod config;
 pub mod database;
-pub mod facades;
 pub mod http;
 pub mod routing;
 pub mod services;
 pub mod state;
 mod utils;
 
-pub use app::Application;
 pub use state::State;

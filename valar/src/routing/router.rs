@@ -1,13 +1,20 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use http::Request as BaseRequest;
-use http::Uri;
-use hyper::body::to_bytes;
-use hyper::body::HttpBody;
-use hyper::Body;
+use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
+use hyper::body::Body;
+use hyper::body::Buf;
+use hyper::body::Bytes;
+use hyper::body::Frame;
+use hyper::body::Incoming;
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use hyper::Request as BaseRequest;
+use hyper::Uri;
+use hyper::{Method, Response as BaseResponse, StatusCode};
 use regex::Error as RegexError;
 use thiserror::Error as ThisError;
+use tokio::net::TcpListener;
 
 use crate::http::Headers;
 use crate::http::Method;
@@ -19,7 +26,6 @@ use crate::routing::route::Builder;
 use crate::routing::route::Config;
 use crate::routing::route::Route;
 use crate::utils::TruncatableToFit;
-use crate::Application;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]
@@ -29,16 +35,16 @@ pub enum Pending {}
 
 pub enum Compiled {}
 
-enum Routes<App: Application> {
+enum Routes<App: Send + Sync + 'static> {
     Pending(Vec<Builder<App>>),
     Compiled(Vec<Route<App>>),
 }
 
 /// A router is used to store routes and match them
 /// against requests.
-pub struct Router<App: Application + Send + Sync + 'static, State = Pending> {
+pub struct Router<App: Send + Sync + 'static, State = Pending> {
     /// Stores the current router configuration.
-    middlewares: Middlewares,
+    middlewares: Middlewares<App>,
 
     /// Stores the routes that the router will use to
     /// match requests.
@@ -57,7 +63,7 @@ pub struct Router<App: Application + Send + Sync + 'static, State = Pending> {
 //     }
 // }
 
-impl<App: Application + Send + Sync + 'static> Router<App, Pending> {
+impl<App: Send + Sync + 'static> Router<App, Pending> {
     /// Returns the routes of the router.
     pub fn routes(&self) -> &[Builder<App>] {
         match &self.routes {
@@ -68,7 +74,7 @@ impl<App: Application + Send + Sync + 'static> Router<App, Pending> {
 
     pub fn middleware<M>(mut self, middleware: M) -> Self
     where
-        M: Middleware + Send + Sync + 'static,
+        M: Middleware<App> + Send + Sync + 'static,
     {
         self.middlewares.push(Arc::new(middleware));
 
@@ -98,7 +104,7 @@ impl<App: Application + Send + Sync + 'static> Router<App, Pending> {
     }
 }
 
-impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
+impl<App: Send + Sync + 'static> Router<App, Compiled> {
     /// Returns the routes of the router.
     pub fn routes(&self) -> &[Route<App>] {
         match &self.routes {
@@ -146,28 +152,31 @@ impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
         summary
     }
 
-    pub(crate) async fn handle_base(&self, app: Arc<App>, request: BaseRequest<Body>) -> Response {
-        let request = match Self::build_request(request).await {
+    pub(crate) async fn handle_base(
+        &self,
+        app: Arc<App>,
+        request: BaseRequest<Incoming>,
+    ) -> Response {
+        let request = match Self::build_request(request, app.clone()).await {
             Ok(request) => request,
             Err(response) => return response,
         };
 
-        self.handle(app, request).await
+        self.handle(request).await
     }
 
-    pub async fn handle<R>(&self, app: Arc<App>, request: R) -> Response
-    where
-        R: Into<Request>,
-    {
-        let request = request.into();
+    pub async fn handle(&self, request: Request<App>) -> Response {
         let route = self.find(request.method(), request.uri());
         let request = request.parematrized(route);
 
-        route.handle(app.clone(), request).await
+        route.handle(request).await
     }
 
     /// Turns a request into a base `Request` object.
-    pub(crate) async fn build_request(mut base: BaseRequest<Body>) -> Result<Request, Response> {
+    pub(crate) async fn build_request(
+        mut base: BaseRequest<Incoming>,
+        app: Arc<App>,
+    ) -> Result<Request<App>, Response> {
         // TODO: Allow this to be dynamic. Current hardcoded 2MB.
         const MAX_ALLOWED_RESPONSE_SIZE: u64 = 1024 * 1024 * 2;
 
@@ -185,9 +194,9 @@ impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
             return Err(error);
         }
 
-        let bytes = to_bytes(base.body_mut()).await?;
+        let bytes = base.body_mut();
 
-        let headers: Headers<Request> = base
+        let headers: Headers<Request<App>> = base
             .headers()
             .iter()
             .map(|(key, value)| {
@@ -204,13 +213,13 @@ impl<App: Application + Send + Sync + 'static> Router<App, Compiled> {
             .version(base.version())
             .headers(headers)
             .body(bytes.escape_ascii().to_string())
-            .build();
+            .build(app);
 
         Ok(builder)
     }
 }
 
-impl<App: Application + Send + Sync + 'static> FromIterator<Builder<App>> for Router<App> {
+impl<App: Send + Sync + 'static> FromIterator<Builder<App>> for Router<App> {
     fn from_iter<I: IntoIterator<Item = Builder<App>>>(routes: I) -> Self {
         let mut routes_with_fallbacks = vec![Builder::fallback()];
 
@@ -239,7 +248,6 @@ impl<App: Application + Send + Sync + 'static> FromIterator<Builder<App>> for Ro
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
     use tokio::join;
 
     use crate::http::Request;
@@ -248,14 +256,10 @@ mod tests {
     use crate::http::Uri;
     use crate::routing::route::Builder as Route;
     use crate::routing::Router;
-    use crate::Application;
 
     struct App;
 
-    #[async_trait]
-    impl Application for App {}
-
-    async fn handler(_app: Arc<App>, _request: Request) -> ResponseResult {
+    async fn handler(_request: Request<App>) -> ResponseResult {
         Response::ok().into_ok()
     }
 
@@ -272,16 +276,16 @@ mod tests {
 
         let router = router.compile().unwrap();
 
-        let r1 = router.handle(app.clone(), Request::get(Uri::from_static("/")));
-        let r2 = router.handle(app.clone(), Request::get(Uri::from_static("/foo")));
-        let r3 = router.handle(app.clone(), Request::get(Uri::from_static("/foo/bar")));
-        let r4 = router.handle(app.clone(), Request::get(Uri::from_static("/foo/bar/")));
-        let r5 = router.handle(app.clone(), Request::get(Uri::from_static("/foo/asd123")));
+        let r1 = router.handle(Request::get(Uri::from_static("/")).build(app.clone()));
+        let r2 = router.handle(Request::get(Uri::from_static("/foo")).build(app.clone()));
+        let r3 = router.handle(Request::get(Uri::from_static("/foo/bar")).build(app.clone()));
+        let r4 = router.handle(Request::get(Uri::from_static("/foo/bar/")).build(app.clone()));
+        let r5 = router.handle(Request::get(Uri::from_static("/foo/asd123")).build(app.clone()));
 
-        let r6 = router.handle(app.clone(), Request::get(Uri::from_static("/bar")));
-        let r7 = router.handle(app.clone(), Request::get(Uri::from_static("/bar/")));
-        let r8 = router.handle(app.clone(), Request::get(Uri::from_static("/bar/baz")));
-        let r9 = router.handle(app.clone(), Request::get(Uri::from_static("/bar/baz/")));
+        let r6 = router.handle(Request::get(Uri::from_static("/bar")).build(app.clone()));
+        let r7 = router.handle(Request::get(Uri::from_static("/bar/")).build(app.clone()));
+        let r8 = router.handle(Request::get(Uri::from_static("/bar/baz")).build(app.clone()));
+        let r9 = router.handle(Request::get(Uri::from_static("/bar/baz/")).build(app.clone()));
 
         let (r1, r2, r3, r4, r5, r6, r7, r8, r9) = join!(r1, r2, r3, r4, r5, r6, r7, r8, r9);
 

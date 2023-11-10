@@ -14,44 +14,43 @@ use crate::http::Result as HttpResult;
 use crate::http::Uri;
 use crate::routing::middleware::Middleware;
 use crate::routing::middleware::Middlewares;
-use crate::Application;
 
 /// Routes are used to match requests to handlers. They
 /// store information about the path, the HTTP method and
 /// the handler function.
-pub struct Data<App: Application> {
+pub struct Data<App: Send + Sync + 'static> {
     path: String,
     methods: Vec<Method>,
     handler: Handler<App>,
     parameters: HashMap<String, String>,
-    middlewares: Middlewares,
+    middlewares: Middlewares<App>,
 }
 
 #[derive(Default)]
-pub struct Config {
-    middlewares: Middlewares,
+pub struct Config<App: Send + Sync + 'static> {
+    middlewares: Middlewares<App>,
     parameters: HashMap<String, String>,
 }
 
-pub struct Group<App: Application> {
-    config: Config,
+pub struct Group<App: Send + Sync + 'static> {
+    config: Config<App>,
     routes: Vec<Builder<App>>,
 }
 
-pub enum Builder<App: Application> {
+pub enum Builder<App: Send + Sync + 'static> {
     Data(Data<App>),
     Group(Group<App>),
 }
 
-pub struct Route<App: Application> {
+pub struct Route<App: Send + Sync + 'static> {
     regex: Regex,
     path: String,
     method: Method,
     handler: Handler<App>,
 }
 
-impl Config {
-    pub fn from_middlewares(middlewares: Middlewares) -> Self {
+impl<App: Send + Sync + 'static> Config<App> {
+    pub fn from_middlewares(middlewares: Middlewares<App>) -> Self {
         Self {
             middlewares,
             parameters: Default::default(),
@@ -59,7 +58,7 @@ impl Config {
     }
 }
 
-impl Clone for Config {
+impl<App: Send + Sync + 'static> Clone for Config<App> {
     fn clone(&self) -> Self {
         Self {
             middlewares: self.middlewares.clone(),
@@ -68,7 +67,7 @@ impl Clone for Config {
     }
 }
 
-impl<'a> FromIterator<&'a Config> for Config {
+impl<'a, App: Send + Sync + 'static> FromIterator<&'a Config<App>> for Config<App> {
     fn from_iter<T: IntoIterator<Item = &'a Self>>(iter: T) -> Self {
         let mut parameters = HashMap::new();
         let mut middlewares = Middlewares::new();
@@ -85,7 +84,7 @@ impl<'a> FromIterator<&'a Config> for Config {
     }
 }
 
-async fn not_found_handler<App: Application>(_app: Arc<App>, request: Request) -> HttpResult {
+async fn not_found_handler<App: Send + Sync + 'static>(request: Request<App>) -> HttpResult {
     Response::not_found()
         .message(format!(
             "No route found for {} {}",
@@ -95,7 +94,7 @@ async fn not_found_handler<App: Application>(_app: Arc<App>, request: Request) -
         .into_ok()
 }
 
-impl<App: Application + Send + Sync + 'static> Builder<App> {
+impl<App: Send + Sync + 'static> Builder<App> {
     pub fn fallback() -> Self {
         Builder::any(".*", not_found_handler)
     }
@@ -120,9 +119,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let data = Data {
             path: path.into(),
@@ -140,9 +139,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let data = Data {
             path: path.into(),
@@ -160,9 +159,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let data = Data {
             path: path.into(),
@@ -180,9 +179,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let data = Data {
             path: path.into(),
@@ -200,9 +199,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let data = Data {
             path: path.into(),
@@ -221,9 +220,9 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     where
         P: Into<String>,
         R: Future<Output = HttpResult> + Send + 'static,
-        H: Fn(Arc<App>, Request) -> R + Send + Sync + 'static,
+        H: Fn(Request<App>) -> R + Send + Sync + 'static,
     {
-        let handler: Handler<App> = Arc::new(move |app, req| Box::pin(handler(app, req)));
+        let handler: Handler<App> = Arc::new(move |req| Box::pin(handler(req)));
 
         let methods = vec![
             Method::OPTIONS,
@@ -250,7 +249,7 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
 
     pub fn middleware<M>(mut self, middleware: M) -> Self
     where
-        M: Middleware + Send + Sync + 'static,
+        M: Middleware<App> + Send + Sync + 'static,
     {
         let middlewares = match &mut self {
             Self::Data(data) => &mut data.middlewares,
@@ -277,7 +276,7 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
         self
     }
 
-    pub fn compile(self, previous: Config) -> Result<Vec<Route<App>>, RegexError> {
+    pub fn compile(self, previous: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
         match self {
             Builder::Data(data) => data.compile(previous),
             Builder::Group(group) => group.compile(previous),
@@ -285,8 +284,8 @@ impl<App: Application + Send + Sync + 'static> Builder<App> {
     }
 }
 
-impl<App: Application + Send + Sync + 'static> Group<App> {
-    pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
+impl<App: Send + Sync + 'static> Group<App> {
+    pub fn compile(self, config: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
 
         for route in self.routes {
@@ -300,7 +299,7 @@ impl<App: Application + Send + Sync + 'static> Group<App> {
     }
 }
 
-impl<App: Application + Send + Sync + 'static> Data<App> {
+impl<App: Send + Sync + 'static> Data<App> {
     /// Returns the regex string literal for the given
     /// route.
     fn to_regex_string(&self) -> String {
@@ -330,7 +329,7 @@ impl<App: Application + Send + Sync + 'static> Data<App> {
         Regex::new(&self.to_regex_string())
     }
 
-    pub fn compile(self, config: Config) -> Result<Vec<Route<App>>, RegexError> {
+    pub fn compile(self, config: Config<App>) -> Result<Vec<Route<App>>, RegexError> {
         let mut routes = Vec::new();
         let regex = self.to_regex()?;
         let middlewares = Middlewares::from_iter([&config.middlewares, &self.middlewares]);
@@ -351,7 +350,7 @@ impl<App: Application + Send + Sync + 'static> Data<App> {
     }
 }
 
-impl<App: Application> Route<App> {
+impl<App: Send + Sync + 'static> Route<App> {
     pub fn method(&self) -> &Method {
         &self.method
     }
@@ -369,8 +368,8 @@ impl<App: Application> Route<App> {
     }
 
     /// Handles the route with the given app and request.
-    pub async fn handle(&self, app: Arc<App>, request: Request) -> Response {
-        match (self.handler)(app, request).await {
+    pub async fn handle(&self, request: Request<App>) -> Response {
+        match (self.handler)(request).await {
             Ok(response) => response,
             Err(response) => response,
         }
@@ -382,13 +381,12 @@ impl<App: Application> Route<App> {
             .trim_matches('/')
             .split('/')
             .zip(uri.path().trim_matches('/').split('/'))
-            .filter_map(|(route_segment, path_segment)| {
-                route_segment.starts_with(':').then(|| {
-                    let parameter = route_segment.trim_start_matches(':').to_string();
-                    let value = path_segment.to_string();
+            .filter(|&(route_segment, _)| route_segment.starts_with(':'))
+            .map(|(route_segment, path_segment)| {
+                let parameter = route_segment.trim_start_matches(':').to_string();
+                let value = path_segment.to_string();
 
-                    (parameter, value)
-                })
+                (parameter, value)
             })
             .collect()
     }
@@ -434,9 +432,7 @@ impl<App: Application> Route<App> {
 //     pub fn middleware_from_arc(
 //         &mut self,
 //         middleware: Arc<dyn Middleware<App> + Send + Sync
-// + 'static>,     ) {
-//         self.middlewares.push(middleware);
-//     }
+// + 'static>,     ) { self.middlewares.push(middleware); }
 
 //     /// Handles the route with the given app and request.
 //     pub async fn handle(&self, app: Arc<App>, mut

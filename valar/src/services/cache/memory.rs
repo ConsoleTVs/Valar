@@ -8,6 +8,9 @@ use tokio::time::interval;
 use tokio::time::Instant;
 
 use crate::services::cache::Error;
+use crate::services::cache::Insertable;
+use crate::services::cache::Retreived;
+use crate::services::cache::Value;
 use crate::services::Cache;
 use crate::State;
 
@@ -59,8 +62,8 @@ impl MemoryCache {
 }
 
 #[async_trait]
-impl Cache for MemoryCache {
-    async fn get(&self, key: &str) -> Result<String, Error> {
+impl<App> Cache<App> for MemoryCache {
+    async fn get(&self, key: &str) -> Result<Value<Retreived>, Error> {
         let mut state = self.state.get().await;
 
         let value = state
@@ -78,37 +81,12 @@ impl Cache for MemoryCache {
             }
         }
 
-        Ok(value)
+        Ok(Value::new(value))
     }
 
-    async fn insert(&self, key: String, value: String) -> Result<(), Error> {
+    async fn insert(&self, key: String, value: Value<Insertable>) -> Result<(), Error> {
         let mut state = self.state.get().await;
-        state.insert(key, value);
-
-        Ok(())
-    }
-
-    async fn insert_for(
-        &self,
-        key: String,
-        value: String,
-        expires_in: Duration,
-    ) -> Result<(), Error> {
-        let expires_at = Instant::now() + expires_in;
-
-        self.insert_until(key, value, expires_at).await
-    }
-
-    async fn insert_until(
-        &self,
-        key: String,
-        value: String,
-        expires_at: Instant,
-    ) -> Result<(), Error> {
-        self.insert(key.clone(), value).await?;
-
-        let mut expirations = self.expirations.get().await;
-        expirations.insert(key, expires_at);
+        state.insert(key, value.into_value());
 
         Ok(())
     }

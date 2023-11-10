@@ -6,14 +6,18 @@ use valar::http::Result;
 
 use crate::App;
 
-pub async fn show(app: Arc<App>, request: Request) -> Result {
-    let count: i32 = request
-        .session()?
-        .get("count")
-        .on(&app.cache)
-        .await
-        .unwrap_or(String::from("0"))
-        .parse()?;
+pub async fn show(request: Request<App>) -> Result {
+    let count = 1;
+    // let app = request.app();
+    // let session = request.session()?;
+
+    // let count: i32 = request
+    //     .session()?
+    //     .get("count")
+    //     .on(&app.cache)
+    //     .await
+    //     .unwrap_or(String::from("0"))
+    //     .parse()?;
 
     Response::ok()
         .html(format!(
@@ -28,20 +32,20 @@ pub async fn show(app: Arc<App>, request: Request) -> Result {
         .into_ok()
 }
 
-pub async fn increment(app: Arc<App>, request: Request) -> Result {
-    let session = request.session()?;
+pub async fn increment(request: Request<App>) -> Result {
+    // let session = request.session()?;
 
-    let count: i32 = session
-        .get("count")
-        .on(&app.cache)
-        .await
-        .unwrap_or(String::from("0"))
-        .parse()?;
+    // let count: i32 = session
+    //     .get("count")
+    //     .on(&app.cache)
+    //     .await
+    //     .unwrap_or(String::from("0"))
+    //     .parse()?;
 
-    session
-        .set("count", (count + 1).to_string())
-        .on(&app.cache)
-        .await?;
+    // session
+    //     .set("count", (count + 1).to_string())
+    //     .on(&app.cache)
+    //     .await?;
 
     Response::redirect("/").into_ok()
 }

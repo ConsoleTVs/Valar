@@ -3,15 +3,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use colored::Colorize;
-use hyper::service::make_service_fn;
+use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::Server as BaseServer;
 use log::debug;
 use log::info;
+use tokio::net::TcpListener;
 
 use crate::routing::router::Compiled;
 use crate::routing::Router;
-use crate::Application;
 
 pub struct Server {
     address: SocketAddr,
@@ -22,7 +21,13 @@ impl Server {
         ServerBuilder::new()
     }
 
-    pub async fn start<App: Application + Send + Sync + 'static>(
+    async fn handler(
+        _: Request<hyper::body::Incoming>,
+    ) -> Result<Response<Full<Bytes>>, Infallible> {
+        Ok(BaseResponse::new(Full::new(Bytes::from("Hello, World!"))))
+    }
+
+    pub async fn start<App: Send + Sync + 'static>(
         &self,
         app: Arc<App>,
         router: Arc<Router<App, Compiled>>,
@@ -31,23 +36,49 @@ impl Server {
         println!("{}", "Lambda Studio • https://λ.studio".italic().dimmed());
         println!();
 
-        let service = make_service_fn(move |conn| {
-            debug!("Incoming connection: {:?}", conn);
-            let app = app.clone();
-            let router = router.clone();
+        let Ok(listener) = TcpListener::bind(&self.address).await else {
+            eprintln!("Failed to bind to address: {}", self.address);
+            return;
+        };
 
-            async move {
-                Ok::<_, Infallible>(service_fn(move |request| {
-                    info!("{} {}", request.method(), request.uri());
-                    let app = app.clone();
-                    let router = router.clone();
+        tokio::task::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    eprintln!("Failed to accept connection");
+                    continue;
+                };
 
-                    async move { router.handle_base(app, request).await.into_base_response() }
-                }))
+                let io = TokioIo::new(stream);
+
+                if let Err(err) = http1::Builder::new()
+                    // `service_fn` converts our function in a `Service`
+                    .serve_connection(io, service_fn(handler))
+                    .await
+                {
+                    println!("Error serving connection: {:?}", err);
+                }
             }
         });
 
-        let server = BaseServer::bind(&self.address).serve(service);
+        // let service = make_service_fn(move |conn| {
+        //     debug!("Incoming connection: {:?}", conn);
+        //     let app = app.clone();
+        //     let router = router.clone();
+
+        //     async move {
+        //         Ok::<_, Infallible>(service_fn(move |request| {
+        //             info!("{} {}", request.method(),
+        // request.uri());             let app =
+        // app.clone();             let router =
+        // router.clone();
+
+        //             async move { router.handle_base(app,
+        // request).await.into_base_response() }         }))
+        //     }
+        // });
+
+        // let server =
+        // BaseServer::bind(&self.address).serve(service);
 
         println!(
             "Server running at: {}{}",
@@ -76,9 +107,9 @@ impl Server {
         );
         println!();
 
-        if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
-        }
+        // if let Err(e) = server.await {
+        //     eprintln!("server error: {}", e);
+        // }
     }
 }
 

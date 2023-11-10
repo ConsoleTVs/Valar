@@ -3,11 +3,13 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use colored::Colorize;
 use serde::Deserialize;
 use serde_json::Result as JsonResult;
 
+use crate::http::context::Context;
 use crate::http::Cookie;
 use crate::http::Headers;
 use crate::http::Method;
@@ -16,7 +18,6 @@ use crate::http::Uri;
 use crate::http::Version;
 use crate::routing::Route;
 use crate::utils::TruncatableToFit;
-use crate::Application;
 // use crate::FakeApplication;
 
 /// A request is used to store information about
@@ -25,9 +26,11 @@ use crate::Application;
 /// Requests are usually found in the handler functions.
 ///
 /// You should usually not build a request manually.
-/// Althought it is possible using the provided builder.
+/// Although it is possible using the provided builder.
 #[derive(Debug)]
-pub struct Request {
+pub struct Request<App: Send + Sync> {
+    app: Arc<App>,
+    context: Arc<Context>,
     method: Method,
     uri: Uri,
     version: Version,
@@ -38,12 +41,20 @@ pub struct Request {
     metadata: HashMap<String, String>,
 }
 
-impl Request {
+impl<App: Send + Sync + 'static> Request<App> {
     pub fn to_fixed_string(&self) -> String {
         let method = self.method().as_str().truncate_to_fit(7);
         let path = self.uri().path().truncate_to_fit(54).bold();
 
         format!("{method:.<7} {path:.<54}")
+    }
+
+    pub fn app(&self) -> &Arc<App> {
+        &self.app
+    }
+
+    pub fn context(&self) -> &Arc<Context> {
+        &self.context
     }
 
     /// Creates a new request using the builder pattern.
@@ -65,12 +76,12 @@ impl Request {
     /// assert!(request.has_query("id"));
     /// assert!(request.has_query("name"));
     /// ```
-    pub fn builder() -> RequestBuilder {
+    pub fn builder() -> RequestBuilder<App> {
         RequestBuilder::new()
     }
 
     /// Creates a new GET request using the builder pattern.
-    pub fn get(uri: Uri) -> RequestBuilder {
+    pub fn get(uri: Uri) -> RequestBuilder<App> {
         RequestBuilder::new().method(Method::GET).uri(uri)
     }
 
@@ -474,14 +485,14 @@ impl Request {
         serde_json::from_str(&self.body)
     }
 
-    pub fn parematrized<App: Application>(mut self, route: &Route<App>) -> Self {
+    pub fn parematrized(mut self, route: &Route<App>) -> Self {
         self.route_parameters = route.parameters(self.uri());
 
         self
     }
 }
 
-impl Display for Request {
+impl<App: Send + Sync + 'static> Display for Request<App> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let method = self.method().as_str();
         let path = self.uri().path().bold();
@@ -526,20 +537,35 @@ impl Display for Request {
 //     type Item = RequestCookie;
 // }
 
-#[derive(Default)]
-pub struct RequestBuilder {
+pub struct RequestBuilder<App: Send + Sync + 'static> {
+    context: Arc<Context>,
     method: Method,
     uri: Uri,
     version: Version,
-    headers: Headers<Request>,
+    headers: Headers<Request<App>>,
     body: String,
     route_parameters: HashMap<String, String>,
     metadata: HashMap<String, String>,
 }
 
-impl RequestBuilder {
-    pub fn new() -> RequestBuilder {
-        RequestBuilder::default()
+impl<App: Send + Sync + 'static> Default for RequestBuilder<App> {
+    fn default() -> Self {
+        Self {
+            context: Default::default(),
+            method: Default::default(),
+            uri: Default::default(),
+            version: Default::default(),
+            headers: Default::default(),
+            body: Default::default(),
+            route_parameters: Default::default(),
+            metadata: Default::default(),
+        }
+    }
+}
+
+impl<App: Send + Sync + 'static> RequestBuilder<App> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn method(mut self, method: Method) -> Self {
@@ -550,9 +576,9 @@ impl RequestBuilder {
 
     pub fn cookie<C>(self, cookie: C) -> Self
     where
-        C: Into<Cookie<Request>>,
+        C: Into<Cookie<Request<App>>>,
     {
-        let cookie: Cookie<Request> = cookie.into();
+        let cookie: Cookie<Request<App>> = cookie.into();
 
         self.header("Cookie", cookie.to_string())
     }
@@ -602,7 +628,7 @@ impl RequestBuilder {
 
     pub fn headers<H>(mut self, headers: H) -> Self
     where
-        H: Into<Headers<Request>>,
+        H: Into<Headers<Request<App>>>,
     {
         self.headers = headers.into();
 
@@ -644,10 +670,21 @@ impl RequestBuilder {
         self
     }
 
-    pub fn build(self) -> Request {
+    pub fn context<C>(mut self, context: C) -> Self
+    where
+        C: Into<Arc<Context>>,
+    {
+        self.context = context.into();
+
+        self
+    }
+
+    pub fn build(self, app: Arc<App>) -> Request<App> {
         Request {
+            app,
+            query_parameters: Request::<App>::query_parameters_from(&self.uri),
             route_parameters: self.route_parameters,
-            query_parameters: Request::query_parameters_from(&self.uri),
+            context: self.context,
             method: self.method,
             uri: self.uri,
             version: self.version,
@@ -658,19 +695,10 @@ impl RequestBuilder {
     }
 }
 
-impl From<RequestBuilder> for Request {
-    fn from(builder: RequestBuilder) -> Self {
-        builder.build()
-    }
-}
-
 // pub struct FakeRequest<'a, App: Application + Send + Sync
-// + 'static> {     app: &'a FakeApplication<App>,
-//     method: Method,
-//     uri: Uri,
-//     version: Version,
-//     headers: Headers,
-//     body: String,
+// + 'static> {     app: &'a FakeApplication<App>, method:
+//   Method, uri: Uri, version: Version, headers: Headers,
+//   body: String,
 // }
 
 // impl<'a, App: Application + Send + Sync + 'static>

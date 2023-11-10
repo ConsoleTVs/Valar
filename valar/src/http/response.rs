@@ -4,7 +4,6 @@ use std::fmt::Display;
 use colored::Colorize;
 use http::Response as BaseResponse;
 use http::Result as BaseHttpResult;
-use hyper::Body;
 use serde::Serialize;
 use serde_json::Error as JsonError;
 use serde_json::Result as JsonResult;
@@ -513,7 +512,7 @@ impl ResponseBuilder {
         self.content_type("application/json")
     }
 
-    pub fn match_content_type(self, request: &Request) -> Self {
+    pub fn match_content_type<App: Send + Sync + 'static>(self, request: &Request<App>) -> Self {
         match request.headers().first("Accept") {
             Some(header) => self.content_type(header),
             None => self,
